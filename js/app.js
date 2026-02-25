@@ -425,7 +425,11 @@ function addTaxDefaultLayer(geojson) {
   }
 
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
-  if (validFeatures.length === 0) return;
+  if (validFeatures.length === 0) {
+    // No geometry in the file — try to borrow shapes from the ownership layer
+    buildTaxDefaultPreviewFromOwnership();
+    return;
+  }
 
   const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
     style: () => ({ ...STYLE_TAXDEFAULT }),
@@ -435,6 +439,51 @@ function addTaxDefaultLayer(geojson) {
       featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
     },
   });
+
+  layer.addTo(map);
+  state.taxdefault.layer = layer;
+}
+
+// Build orange preview layer using ownership geometry for tax-default APNs.
+// Called when the tax default file has no geometry of its own.
+function buildTaxDefaultPreviewFromOwnership() {
+  if (state.taxdefault.layer) {
+    map.removeLayer(state.taxdefault.layer);
+    state.taxdefault.layer = null;
+  }
+
+  const owGJ  = state.ownership.geojson;
+  const tdGJ  = state.taxdefault.geojson;
+  if (!owGJ || !tdGJ || !state.ownership.idField || !state.taxdefault.idField) return;
+
+  // Build set of normalized tax-default APNs
+  const tdIds = new Set(
+    (tdGJ.features || []).map(f =>
+      normalizeId((f.properties || {})[state.taxdefault.idField])
+    ).filter(Boolean)
+  );
+
+  if (!tdIds.size) return;
+
+  // Find ownership features whose APN is in the tax-default list
+  const matched = (owGJ.features || []).filter(f => {
+    const id = normalizeId((f.properties || {})[state.ownership.idField]);
+    return id && tdIds.has(id);
+  });
+
+  if (!matched.length) return;
+
+  const layer = L.geoJSON(
+    { type: 'FeatureCollection', features: matched },
+    {
+      style: () => ({ ...STYLE_TAXDEFAULT }),
+      pointToLayer: (feature, latlng) =>
+        L.circleMarker(latlng, { radius: 5, ...STYLE_TAXDEFAULT }),
+      onEachFeature: (feature, featureLayer) => {
+        featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
+      },
+    }
+  );
 
   layer.addTo(map);
   state.taxdefault.layer = layer;
@@ -969,6 +1018,13 @@ async function handleLayerLoad(file, layerType) {
         try { map.fitBounds(state.ownership.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
       }
 
+      // If tax default is already loaded without geometry, build its preview now
+      const tdHasGeom = state.taxdefault.geojson &&
+        (state.taxdefault.geojson.features || []).some(f => f.geometry);
+      if (state.taxdefault.geojson && !tdHasGeom) {
+        buildTaxDefaultPreviewFromOwnership();
+      }
+
     } else {
       state.taxdefault.geojson = geojson;
       state.taxdefault.fields  = fields;
@@ -1037,10 +1093,12 @@ async function handleLayerLoad(file, layerType) {
 // Field selectors — update state when user changes
 document.getElementById('ownership-id-field').addEventListener('change', e => {
   state.ownership.idField = e.target.value;
+  buildTaxDefaultPreviewFromOwnership();
 });
 
 document.getElementById('taxdefault-id-field').addEventListener('change', e => {
   state.taxdefault.idField = e.target.value;
+  buildTaxDefaultPreviewFromOwnership();
 });
 
 document.getElementById('taxdefault-amount-field').addEventListener('change', e => {
