@@ -605,11 +605,12 @@ function addMatchedLayer(matchedFeatures) {
       pointToLayer: (feature, latlng) =>
         L.circleMarker(latlng, { radius: 8, ...STYLE_MATCHED }),
       onEachFeature: (feature, featureLayer) => {
-        const props = feature.properties || {};
+        const props  = feature.properties || {};
         const idField = state.taxdefault.idField || state.ownership.idField;
-        const apn = idField ? props[idField] : '—';
+        const apn    = idField ? props[idField] : '—';
         const amount = state.taxdefault.amountField ? props[state.taxdefault.amountField] : null;
-        const owner = state.taxdefault.ownerField ? props[state.taxdefault.ownerField] : null;
+        const owner  = state.taxdefault.ownerField  ? props[state.taxdefault.ownerField]  : null;
+        const consArea = props.Conservation_Area || null;
 
         const amountDisplay = amount
           ? `<div class="popup-amount">
@@ -618,14 +619,22 @@ function addMatchedLayer(matchedFeatures) {
              </div>`
           : '';
 
+        const consDisplay = consArea
+          ? `<div class="popup-conservation">
+               <span class="popup-conservation-label">Conservation Area</span>
+               <span class="popup-conservation-name">${consArea}</span>
+             </div>`
+          : '';
+
         const popupContent = `
           <div class="popup-title">${apn || 'Parcel'}</div>
           ${owner ? `<div class="popup-row"><span class="popup-label">Owner</span><span class="popup-value">${owner}</span></div>` : ''}
           ${amountDisplay}
+          ${consDisplay}
           <span class="popup-tag">${props._matchType || 'Matched'}</span>
           <button class="popup-btn" onclick="showParcelModalById('${apn}')">View full details →</button>
         `;
-        featureLayer.bindPopup(popupContent, { maxWidth: 260 });
+        featureLayer.bindPopup(popupContent, { maxWidth: 280 });
       },
     }
   );
@@ -637,31 +646,24 @@ function addMatchedLayer(matchedFeatures) {
 // ─── Match Logic ─────────────────────────────────────────────────────────────
 
 function runMatchAnalysis() {
-  const matchById       = document.getElementById('match-by-id').checked;
-  const matchByTouching = document.getElementById('match-by-touching').checked;
+  const conservationGJ = state.conservation.geojson;
+  const taxdefaultGJ   = state.taxdefault.geojson;
 
-  if (!matchById && !matchByTouching) {
-    setMatchStatus('Select at least one match method.', 'error');
+  if (!conservationGJ || !taxdefaultGJ) {
+    setMatchStatus('Load Conservation Boundaries and Tax Default List first.', 'error');
     return;
   }
 
-  const ownershipGJ  = state.ownership.geojson;
-  const taxdefaultGJ = state.taxdefault.geojson;
-
-  if (!ownershipGJ || !taxdefaultGJ) {
-    setMatchStatus('Both layers must be loaded before running match.', 'error');
+  const conservationFeatures = (conservationGJ.features || []).filter(f => f.geometry);
+  if (!conservationFeatures.length) {
+    setMatchStatus('Conservation layer has no geometry — upload a shapefile or GeoJSON.', 'error');
     return;
   }
 
-  showLoading('Running match analysis...');
+  showLoading('Finding tax defaults within conservation areas...');
 
-  // Use setTimeout to allow loading indicator to render
   setTimeout(() => {
     try {
-      const results = [];
-      const seenIds = new Set();
-
-      const ownershipFeatures  = ownershipGJ.features  || [];
       const taxdefaultFeatures = taxdefaultGJ.features || [];
 
       // Build county lookup for geometry fallback
@@ -673,104 +675,57 @@ function runMatchAnalysis() {
         });
       }
 
-      // --- ID-based matching ---
-      if (matchById && state.ownership.idField && state.taxdefault.idField) {
-        // Build lookup from ownership by normalized ID
-        const ownershipById = new Map();
-        ownershipFeatures.forEach(f => {
-          const raw = (f.properties || {})[state.ownership.idField];
-          const id = normalizeId(raw);
-          if (id) ownershipById.set(id, f);
-        });
-
-        taxdefaultFeatures.forEach(tdFeature => {
-          const raw = (tdFeature.properties || {})[state.taxdefault.idField];
-          const id = normalizeId(raw);
-          if (!id) return;
-
-          const owFeature = ownershipById.get(id);
-
-          // Use ownership geometry if available (more detailed), else taxdefault
-          // Geometry priority: ownership → taxdefault → county shapefile
-          let geom = (owFeature && owFeature.geometry) ? owFeature.geometry
-                   : tdFeature.geometry || null;
-          if (!geom && countyById.size) {
-            const cf = countyById.get(id);
-            if (cf) geom = cf.geometry;
-          }
-
-          const mergedProps = {
-            ...(owFeature ? owFeature.properties : {}),
-            ...tdFeature.properties,
-            _matchType: 'ID Match',
-            _matchedApn: raw,
-          };
-
-          if (!seenIds.has(id)) {
-            seenIds.add(id);
-            results.push({ type: 'Feature', geometry: geom, properties: mergedProps });
-          }
-        });
-      }
-
-      // --- Helper: resolve geometry from the feature itself or county by APN ---
-      const resolveGeom = (feature, layerType) => {
+      // Resolve geometry: use the feature's own geometry, or look up by APN in county
+      const resolveGeom = (feature) => {
         if (feature.geometry) return feature.geometry;
-        if (!countyById.size) return null;
-        const idField = layerType === 'ownership' ? state.ownership.idField : state.taxdefault.idField;
-        if (!idField) return null;
-        const id = normalizeId((feature.properties || {})[idField]);
+        if (!countyById.size || !state.taxdefault.idField) return null;
+        const id = normalizeId((feature.properties || {})[state.taxdefault.idField]);
         const cf = id ? countyById.get(id) : null;
         return cf ? cf.geometry : null;
       };
 
-      // Encode a coordinate pair to a lookup key (6 dp ≈ 0.1 m precision)
-      const coord2key = (x, y) => `${x.toFixed(6)},${y.toFixed(6)}`;
+      const results = [];
+      const seenIds = new Set();
 
-      // --- Touching / Adjacent matching ---
-      // Find all tax-default parcels that share at least one boundary vertex
-      // with any of the user's ownership parcels.
-      if (matchByTouching) {
-        // Build a set of every boundary coordinate from every ownership parcel
-        const owBoundaryCoords = new Set();
-        ownershipFeatures.forEach(f => {
-          const geom = resolveGeom(f, 'ownership');
-          if (!geom) return;
-          getAllCoords(geom).forEach(([x, y]) => owBoundaryCoords.add(coord2key(x, y)));
+      taxdefaultFeatures.forEach(tdFeature => {
+        const geom = resolveGeom(tdFeature);
+        if (!geom) return;
+
+        const centroid = getCentroid(geom);
+        if (!centroid) return;
+
+        // Find every conservation area this parcel's centroid falls inside
+        const containing = conservationFeatures.filter(cf => pointInGeoJSON(centroid, cf));
+        if (!containing.length) return;
+
+        const tdId = state.taxdefault.idField
+          ? normalizeId((tdFeature.properties || {})[state.taxdefault.idField])
+          : null;
+        if (tdId && seenIds.has(tdId)) return;
+        if (tdId) seenIds.add(tdId);
+
+        // Build a readable label from the conservation area(s)
+        const conservationNames = containing.map(cf => {
+          const p = cf.properties || {};
+          return state.conservation.nameField
+            ? p[state.conservation.nameField]
+            : Object.values(p).find(v => v && typeof v === 'string' && v.length > 1);
+        }).filter(Boolean).join('; ');
+
+        const countyFeature = (tdId && countyById.size) ? countyById.get(tdId) : null;
+
+        results.push({
+          type: 'Feature',
+          geometry: geom,
+          properties: {
+            ...(countyFeature ? countyFeature.properties : {}),
+            ...tdFeature.properties,
+            Conservation_Area: conservationNames || 'Conservation Area',
+            _matchType: 'In Conservation Area',
+            _matchedApn: tdId || '',
+          },
         });
-
-        if (owBoundaryCoords.size) {
-          taxdefaultFeatures.forEach(tdFeature => {
-            const tdIdField = state.taxdefault.idField;
-            const tdId = tdIdField
-              ? normalizeId((tdFeature.properties || {})[tdIdField])
-              : null;
-
-            // Skip if already captured by ID match
-            if (tdId && seenIds.has(tdId)) return;
-
-            const geom = resolveGeom(tdFeature, 'taxdefault');
-            if (!geom) return;
-
-            // Check if this parcel shares any boundary coord with our ownership
-            const tdCoords = getAllCoords(geom);
-            const touches  = tdCoords.some(([x, y]) => owBoundaryCoords.has(coord2key(x, y)));
-            if (!touches) return;
-
-            if (tdId) seenIds.add(tdId);
-
-            // Pull extra county context if available
-            const countyFeature = (tdId && countyById.size) ? countyById.get(tdId) : null;
-            const mergedProps = {
-              ...(countyFeature ? countyFeature.properties : {}),
-              ...tdFeature.properties,
-              _matchType: 'Adjacent / Touching',
-              _matchedApn: tdId || '',
-            };
-            results.push({ type: 'Feature', geometry: geom, properties: mergedProps });
-          });
-        }
-      }
+      });
 
       state.matched = results;
       addMatchedLayer(results);
@@ -780,7 +735,7 @@ function runMatchAnalysis() {
 
     } catch (err) {
       hideLoading();
-      setMatchStatus('Error during match: ' + err.message, 'error');
+      setMatchStatus('Error during analysis: ' + err.message, 'error');
       console.error(err);
     }
   }, 50);
@@ -931,9 +886,10 @@ function renderResultsList(features, filter = '') {
     const amtField   = state.taxdefault.amountField;
     const ownerField = state.taxdefault.ownerField;
 
-    const apn    = idField    ? props[idField]    : null;
-    const amount = amtField   ? props[amtField]   : null;
-    const owner  = ownerField ? props[ownerField] : null;
+    const apn      = idField    ? props[idField]    : null;
+    const amount   = amtField   ? props[amtField]   : null;
+    const owner    = ownerField ? props[ownerField] : null;
+    const consArea = props.Conservation_Area || null;
 
     const item = document.createElement('div');
     item.className = 'result-item';
@@ -942,7 +898,8 @@ function renderResultsList(features, filter = '') {
         <span class="result-apn">${apn || '—'}</span>
         ${amount ? `<span class="result-amount">${formatCurrency(amount)}</span>` : ''}
       </div>
-      ${owner ? `<div class="result-owner">${owner}</div>` : ''}
+      ${consArea ? `<div class="result-conservation-area">${consArea}</div>` : ''}
+      ${owner    ? `<div class="result-owner">${owner}</div>` : ''}
       <span class="result-match-type">${props._matchType || 'Matched'}</span>
     `;
 
@@ -971,17 +928,13 @@ function renderResultsList(features, filter = '') {
 
 function updateMatchStatus(count) {
   if (count === 0) {
-    setMatchStatus('No matches found. Try adjusting fields or match options.', 'warning');
+    setMatchStatus('No tax default parcels found within conservation boundaries.', 'warning');
     return;
   }
-  const results  = state.matched;
-  const nId      = results.filter(f => (f.properties || {})._matchType === 'ID Match').length;
-  const nTouch   = results.filter(f => (f.properties || {})._matchType === 'Adjacent / Touching').length;
-  const parts    = [];
-  if (nId)    parts.push(`${nId} owned`);
-  if (nTouch) parts.push(`${nTouch} touching`);
-  const detail   = parts.length ? ` (${parts.join(', ')})` : '';
-  setMatchStatus(`Found ${count} parcel${count !== 1 ? 's' : ''}${detail} — see results panel.`, 'success');
+  setMatchStatus(
+    `Found ${count} tax default parcel${count !== 1 ? 's' : ''} inside conservation areas. Export below.`,
+    'success'
+  );
 }
 
 function setMatchStatus(msg, type = '') {
@@ -1091,7 +1044,7 @@ function exportMatchedCSV() {
   });
 
   const csv = [headers.join(','), ...rows].join('\n');
-  downloadText(csv, 'tax_default_matched_parcels.csv', 'text/csv');
+  downloadText(csv, 'tax_defaults_in_conservation_areas.csv', 'text/csv');
 }
 
 function downloadText(content, filename, mime) {
@@ -1113,7 +1066,7 @@ function updateBadge(layer, count) {
 }
 
 function checkRunMatchEnabled() {
-  const canRun = state.ownership.geojson && state.taxdefault.geojson;
+  const canRun = state.conservation.geojson && state.taxdefault.geojson;
   const btn = document.getElementById('btn-run-match');
   btn.disabled = !canRun;
   if (canRun) {

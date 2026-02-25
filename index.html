@@ -182,20 +182,11 @@
         <div class="panel-header">
           <div class="step-badge">5</div>
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <h2>Match &amp; Identify</h2>
+          <h2>Run Analysis</h2>
         </div>
-        <div class="match-options">
-          <label class="toggle-label" title="Also find parcels that share an ID / APN with your ownership data">
-            <input type="checkbox" id="match-by-id" checked />
-            Match owned parcels by APN
-          </label>
-          <label class="toggle-label" title="Find tax default parcels that share a boundary edge with your ownership parcels">
-            <input type="checkbox" id="match-by-touching" checked />
-            Find parcels touching your ownership
-          </label>
-        </div>
+        <p class="panel-desc">Finds every tax default parcel whose location falls inside a conservation boundary. Requires <strong>Conservation Boundaries</strong> and <strong>Tax Default List</strong> to be loaded.</p>
         <button id="btn-run-match" class="btn btn-primary btn-full" disabled>
-          Run Match Analysis
+          Find Tax Defaults in Conservation Areas
         </button>
         <div id="match-status" class="match-status"></div>
       </section>

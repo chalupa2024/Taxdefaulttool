@@ -789,6 +789,38 @@ html, body {
 }
 .conservation-tooltip::before { border-right-color: rgba(74,222,128,0.4); }
 
+.popup-conservation {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 4px;
+  padding: 5px 10px;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 6px;
+}
+.popup-conservation-label {
+  font-size: 10px;
+  color: var(--color-conservation);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1px;
+}
+.popup-conservation-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-conservation);
+}
+
+.result-conservation-area {
+  font-size: 11px;
+  color: var(--color-conservation);
+  font-weight: 500;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .popup-amount {
   display: flex;
   flex-direction: column;
