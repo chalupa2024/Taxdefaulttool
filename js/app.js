@@ -199,7 +199,10 @@ async function parseFile(file) {
   if (name.endsWith('.csv')) {
     return parseCSV(file);
   }
-  throw new Error('Unsupported file type. Use GeoJSON, Shapefile (.zip), or CSV.');
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    return parseExcel(file);
+  }
+  throw new Error('Unsupported file type. Use GeoJSON, Shapefile (.zip), CSV, or Excel (.xlsx).');
 }
 
 function parseGeoJSON(file) {
@@ -292,6 +295,65 @@ function parseCSV(file) {
       error: err => reject(new Error('CSV parse error: ' + err.message)),
     });
   });
+}
+
+async function parseExcel(file) {
+  const buffer = await file.arrayBuffer();
+  let workbook;
+  try {
+    workbook = XLSX.read(buffer, { type: 'array' });
+  } catch (err) {
+    throw new Error('Failed to read Excel file: ' + err.message);
+  }
+
+  // Use the first sheet
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('Excel file contains no sheets.');
+
+  const sheet = workbook.Sheets[sheetName];
+  const rows  = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+  if (!rows.length) throw new Error('Excel sheet "' + sheetName + '" is empty.');
+
+  const fields = Object.keys(rows[0]);
+
+  // Check for geometry columns (same logic as CSV)
+  const latField = fields.find(f => /^lat(itude)?$/i.test(f));
+  const lngField = fields.find(f => /^lon(g(itude)?)?$|^lng$/i.test(f));
+  const wktField = fields.find(f => /wkt|geometry|geom/i.test(f));
+
+  let features;
+
+  if (latField && lngField) {
+    features = rows
+      .filter(row => row[latField] !== '' && row[lngField] !== '')
+      .map(row => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [parseFloat(row[lngField]), parseFloat(row[latField])],
+        },
+        properties: row,
+      }));
+  } else if (wktField) {
+    features = rows
+      .filter(row => row[wktField])
+      .map(row => ({
+        type: 'Feature',
+        geometry: parseWKT(String(row[wktField])),
+        properties: row,
+      }))
+      .filter(f => f.geometry !== null);
+  } else {
+    // Attribute-only — ID matching still works
+    features = rows.map(row => ({
+      type: 'Feature',
+      geometry: null,
+      properties: row,
+    }));
+  }
+
+  return { type: 'FeatureCollection', features };
 }
 
 // Minimal WKT parser for POLYGON and MULTIPOLYGON

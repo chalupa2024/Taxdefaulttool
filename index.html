@@ -19,6 +19,9 @@
   <!-- PapaParse for CSV -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
+  <!-- SheetJS for Excel (.xlsx / .xls) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <!-- JSZip for zip file handling -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -66,8 +69,8 @@
         <div class="upload-zone" id="drop-ownership" data-layer="ownership">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Drop file here or <label class="link-label" for="file-ownership">browse</label></span>
-          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV</span>
-          <input type="file" id="file-ownership" accept=".geojson,.json,.zip,.csv" />
+          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV, Excel (.xlsx)</span>
+          <input type="file" id="file-ownership" accept=".geojson,.json,.zip,.csv,.xlsx,.xls" />
         </div>
         <div class="field-map-row" id="ownership-field-map" style="display:none;">
           <label>Parcel ID field:
@@ -93,8 +96,8 @@
         <div class="upload-zone" id="drop-taxdefault" data-layer="taxdefault">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Drop file here or <label class="link-label" for="file-taxdefault">browse</label></span>
-          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV</span>
-          <input type="file" id="file-taxdefault" accept=".geojson,.json,.zip,.csv" />
+          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV, Excel (.xlsx)</span>
+          <input type="file" id="file-taxdefault" accept=".geojson,.json,.zip,.csv,.xlsx,.xls" />
         </div>
         <div class="field-map-row" id="taxdefault-field-map" style="display:none;">
           <label>Parcel ID field:
