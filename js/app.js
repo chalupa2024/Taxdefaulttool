@@ -932,7 +932,14 @@ function updateBadge(layer, count) {
 
 function checkRunMatchEnabled() {
   const canRun = state.ownership.geojson && state.taxdefault.geojson;
-  document.getElementById('btn-run-match').disabled = !canRun;
+  const btn = document.getElementById('btn-run-match');
+  btn.disabled = !canRun;
+  if (canRun) {
+    btn.classList.add('btn-pulse');
+    btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    btn.classList.remove('btn-pulse');
+  }
 }
 
 // ─── Layer Load Handler ───────────────────────────────────────────────────────
@@ -979,6 +986,12 @@ async function handleLayerLoad(file, layerType) {
 
       addTaxDefaultLayer(geojson);
       updateBadge('taxdefault', count);
+
+      const hasGeom = (geojson.features || []).some(f => f.geometry);
+      const notice = document.getElementById('taxdefault-no-geom-notice');
+      const controls = document.getElementById('taxdefault-controls');
+      notice.style.display   = hasGeom ? 'none' : 'flex';
+      controls.style.display = hasGeom ? 'flex' : 'none';
 
       if (state.taxdefault.layer) {
         try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
@@ -1065,7 +1078,10 @@ document.getElementById('btn-zoom-taxdefault').addEventListener('click', () => {
 });
 
 // Run match
-document.getElementById('btn-run-match').addEventListener('click', runMatchAnalysis);
+document.getElementById('btn-run-match').addEventListener('click', () => {
+  document.getElementById('btn-run-match').classList.remove('btn-pulse');
+  runMatchAnalysis();
+});
 
 // Results panel
 document.getElementById('btn-close-results').addEventListener('click', () => {

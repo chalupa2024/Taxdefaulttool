@@ -110,6 +110,10 @@
             <select id="taxdefault-owner-field"><option value="">— none —</option></select>
           </label>
         </div>
+        <div id="taxdefault-no-geom-notice" class="no-geom-notice" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Spreadsheet loaded — no map geometry found. Parcels will be matched by APN/ID against your ownership layer. Click <strong>Run Match Analysis</strong> below.
+        </div>
         <div class="layer-controls" id="taxdefault-controls" style="display:none;">
           <button class="btn btn-sm" id="btn-zoom-taxdefault">Zoom to layer</button>
           <label class="toggle-label">

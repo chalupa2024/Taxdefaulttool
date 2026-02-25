@@ -373,6 +373,40 @@ html, body {
 }
 .btn-icon:hover { color: var(--color-text); background: var(--color-surface-2); }
 
+/* ---- No-geometry notice ---- */
+.no-geom-notice {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.3);
+  color: var(--color-warning);
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.no-geom-notice svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.no-geom-notice strong { color: var(--color-text); }
+
+/* ---- Button pulse (ready to run) ---- */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79,126,248,0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(79,126,248,0); }
+}
+
+.btn-pulse {
+  animation: pulse-glow 1.6s ease-in-out infinite;
+}
+
 /* ---- Badge ---- */
 .badge {
   font-size: 10px;
