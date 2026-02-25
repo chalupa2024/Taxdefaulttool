@@ -19,6 +19,12 @@ const state = {
     idField:   null,
     fields:    [],
   },
+  conservation: {
+    geojson:    null,  // conservation boundary polygons
+    layer:      null,
+    nameField:  null,
+    fields:     [],
+  },
   taxdefault: {
     geojson:   null,   // tax default list (may be attribute-only)
     layer:     null,
@@ -78,6 +84,15 @@ const STYLE_COUNTY = {
   opacity: 0.6,
   fillColor: '#334155',
   fillOpacity: 0.06,
+};
+
+const STYLE_CONSERVATION = {
+  color: '#4ade80',
+  weight: 2,
+  opacity: 0.8,
+  fillColor: '#4ade80',
+  fillOpacity: 0.08,
+  dashArray: '8 5',
 };
 
 const STYLE_OWNERSHIP = {
@@ -422,6 +437,30 @@ function addCountyLayer(geojson) {
   });
   layer.addTo(map);
   state.county.layer = layer;
+}
+
+function addConservationLayer(geojson) {
+  if (state.conservation.layer) {
+    map.removeLayer(state.conservation.layer);
+    state.conservation.layer = null;
+  }
+  const validFeatures = (geojson.features || []).filter(f => f.geometry);
+  if (!validFeatures.length) return;
+
+  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+    style: () => ({ ...STYLE_CONSERVATION }),
+    pointToLayer: (feature, latlng) =>
+      L.circleMarker(latlng, { radius: 5, ...STYLE_CONSERVATION }),
+    onEachFeature: (feature, featureLayer) => {
+      const props    = feature.properties || {};
+      const nameVal  = state.conservation.nameField ? props[state.conservation.nameField] : null;
+      const fallback = Object.values(props).find(v => v && typeof v === 'string' && v.length > 1);
+      const label    = nameVal || fallback || 'Conservation Area';
+      featureLayer.bindTooltip(label, { sticky: true, className: 'conservation-tooltip' });
+    },
+  });
+  layer.addTo(map);
+  state.conservation.layer = layer;
 }
 
 // Generic: build a visible layer for 'ownership' or 'taxdefault' by looking up
@@ -1132,6 +1171,25 @@ async function handleLayerLoad(file, layerType) {
         if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
       }
 
+    } else if (layerType === 'conservation') {
+      state.conservation.geojson    = geojson;
+      state.conservation.fields     = fields;
+      state.conservation.nameField  = fields.find(f =>
+        /name|title|label|area|unit|property/i.test(f)
+      ) || null;
+
+      populateOptionalFieldSelect('conservation-name-field', fields, state.conservation.nameField);
+      document.getElementById('conservation-field-map').style.display = 'block';
+      document.getElementById('conservation-controls').style.display  = 'flex';
+      document.getElementById('drop-conservation').classList.add('loaded');
+
+      addConservationLayer(geojson);
+      updateBadge('conservation', count);
+
+      if (state.conservation.layer) {
+        try { map.fitBounds(state.conservation.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+      }
+
     } else if (layerType === 'ownership') {
       state.ownership.geojson  = geojson;
       state.ownership.fields   = fields;
@@ -1191,8 +1249,8 @@ async function handleLayerLoad(file, layerType) {
 
 // ─── Event Listeners ─────────────────────────────────────────────────────────
 
-// File inputs for all three layers
-['county', 'ownership', 'taxdefault'].forEach(layerType => {
+// File inputs for all four layers
+['county', 'ownership', 'conservation', 'taxdefault'].forEach(layerType => {
   const fileInput = document.getElementById(`file-${layerType}`);
   const dropZone  = document.getElementById(`drop-${layerType}`);
 
@@ -1257,8 +1315,13 @@ document.getElementById('taxdefault-owner-field').addEventListener('change', e =
   state.taxdefault.ownerField = e.target.value;
 });
 
+document.getElementById('conservation-name-field').addEventListener('change', e => {
+  state.conservation.nameField = e.target.value;
+  if (state.conservation.geojson) addConservationLayer(state.conservation.geojson);
+});
+
 // Layer visibility toggles
-['county', 'ownership', 'taxdefault'].forEach(lt => {
+['county', 'ownership', 'conservation', 'taxdefault'].forEach(lt => {
   const toggle = document.getElementById(`toggle-${lt}`);
   if (toggle) toggle.addEventListener('change', e => {
     if (!state[lt].layer) return;
@@ -1276,6 +1339,11 @@ document.getElementById('btn-zoom-county').addEventListener('click', () => {
 document.getElementById('btn-zoom-ownership').addEventListener('click', () => {
   if (state.ownership.layer) {
     try { map.fitBounds(state.ownership.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+  }
+});
+document.getElementById('btn-zoom-conservation').addEventListener('click', () => {
+  if (state.conservation.layer) {
+    try { map.fitBounds(state.conservation.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
   }
 });
 document.getElementById('btn-zoom-taxdefault').addEventListener('click', () => {
@@ -1321,7 +1389,7 @@ document.getElementById('btn-basemap-toggle').addEventListener('click', () => {
 document.getElementById('btn-clear-all').addEventListener('click', () => {
   if (!confirm('Clear all loaded data and results?')) return;
 
-  ['county', 'ownership', 'taxdefault'].forEach(lt => {
+  ['county', 'ownership', 'conservation', 'taxdefault'].forEach(lt => {
     if (state[lt].layer) { map.removeLayer(state[lt].layer); state[lt].layer = null; }
     state[lt].geojson = null;
     state[lt].fields  = [];

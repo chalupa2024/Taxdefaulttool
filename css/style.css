@@ -21,6 +21,7 @@
   /* Layer colours */
   --color-county: #64748b;
   --color-ownership: #60a5fa;
+  --color-conservation: #4ade80;
   --color-taxdefault: #f97316;
   --color-matched: #a855f7;
 
@@ -161,10 +162,11 @@ html, body {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.dot-county     { background: var(--color-county); }
-.dot-ownership  { background: var(--color-ownership); }
-.dot-taxdefault { background: var(--color-taxdefault); }
-.dot-matched    { background: var(--color-matched); }
+.dot-county        { background: var(--color-county); }
+.dot-ownership     { background: var(--color-ownership); }
+.dot-conservation  { background: var(--color-conservation); }
+.dot-taxdefault    { background: var(--color-taxdefault); }
+.dot-matched       { background: var(--color-matched); }
 
 /* ---- Upload Zone ---- */
 .upload-zone {
@@ -327,10 +329,11 @@ html, body {
   border-radius: 2px;
   flex-shrink: 0;
 }
-.swatch-county     { background: var(--color-county);     border: 1px solid rgba(100,116,139,0.5); }
-.swatch-ownership  { background: var(--color-ownership);  border: 1px solid rgba(96,165,250,0.5); }
-.swatch-taxdefault { background: var(--color-taxdefault); border: 1px solid rgba(249,115,22,0.5); }
-.swatch-matched    { background: var(--color-matched);    border: 1px solid rgba(168,85,247,0.5); }
+.swatch-county        { background: var(--color-county);        border: 1px solid rgba(100,116,139,0.5); }
+.swatch-ownership     { background: var(--color-ownership);     border: 1px solid rgba(96,165,250,0.5); }
+.swatch-conservation  { background: var(--color-conservation);  border: 1px solid rgba(74,222,128,0.5); opacity: 0.75; }
+.swatch-taxdefault    { background: var(--color-taxdefault);    border: 1px solid rgba(249,115,22,0.5); }
+.swatch-matched       { background: var(--color-matched);       border: 1px solid rgba(168,85,247,0.5); }
 
 /* ---- Buttons ---- */
 .btn {
@@ -773,6 +776,18 @@ html, body {
 
 .popup-label { color: var(--color-text-muted); font-size: 12px; }
 .popup-value { font-size: 12px; font-weight: 500; }
+
+/* Conservation boundary tooltip */
+.conservation-tooltip {
+  background: rgba(15, 30, 15, 0.88);
+  border: 1px solid rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.conservation-tooltip::before { border-right-color: rgba(74,222,128,0.4); }
 
 .popup-amount {
   display: flex;
