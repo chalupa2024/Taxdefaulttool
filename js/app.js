@@ -7,22 +7,28 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const state = {
+  county: {
+    geojson:   null,   // full county parcel fabric — geometry source
+    layer:     null,
+    idField:   null,
+    fields:    [],
+  },
   ownership: {
-    geojson:   null,   // raw GeoJSON FeatureCollection
-    layer:     null,   // Leaflet layer
-    idField:   null,   // which property is the parcel ID
-    fields:    [],     // all property keys
+    geojson:   null,   // user's ownership data (may be attribute-only)
+    layer:     null,
+    idField:   null,
+    fields:    [],
   },
   taxdefault: {
-    geojson:   null,
+    geojson:   null,   // tax default list (may be attribute-only)
     layer:     null,
     idField:   null,
     amountField: null,
     ownerField:  null,
     fields:    [],
   },
-  matched:       [],   // array of match result objects
-  matchedLayer:  null, // Leaflet layer for matched highlights
+  matched:       [],
+  matchedLayer:  null,
   basemapIdx:    0,
 };
 
@@ -65,6 +71,14 @@ function setBasemap(idx) {
 setBasemap(0);
 
 // ─── Layer Style Factories ─────────────────────────────────────────────────────
+
+const STYLE_COUNTY = {
+  color: '#64748b',
+  weight: 0.6,
+  opacity: 0.6,
+  fillColor: '#334155',
+  fillOpacity: 0.06,
+};
 
 const STYLE_OWNERSHIP = {
   color: '#60a5fa',
@@ -393,18 +407,73 @@ function extractRings(wkt) {
 
 // ─── Layer Management ─────────────────────────────────────────────────────────
 
+function addCountyLayer(geojson) {
+  if (state.county.layer) {
+    map.removeLayer(state.county.layer);
+    state.county.layer = null;
+  }
+  const validFeatures = (geojson.features || []).filter(f => f.geometry);
+  if (!validFeatures.length) return;
+
+  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+    style: () => ({ ...STYLE_COUNTY }),
+    pointToLayer: (feature, latlng) =>
+      L.circleMarker(latlng, { radius: 3, ...STYLE_COUNTY }),
+  });
+  layer.addTo(map);
+  state.county.layer = layer;
+}
+
+// Generic: build a visible layer for 'ownership' or 'taxdefault' by looking up
+// their APNs in the county shapefile. Returns true if successful.
+function buildLayerFromCounty(layerType) {
+  const ls = state[layerType];
+  if (ls.layer) { map.removeLayer(ls.layer); ls.layer = null; }
+
+  if (!state.county.geojson || !state.county.idField || !ls.geojson || !ls.idField) return false;
+
+  const targetIds = new Set(
+    (ls.geojson.features || [])
+      .map(f => normalizeId((f.properties || {})[ls.idField]))
+      .filter(Boolean)
+  );
+  if (!targetIds.size) return false;
+
+  // Build county lookup map once
+  const countyFeatures = state.county.geojson.features || [];
+  const matched = countyFeatures.filter(f => {
+    const id = normalizeId((f.properties || {})[state.county.idField]);
+    return id && targetIds.has(id);
+  });
+  if (!matched.length) return false;
+
+  const style = layerType === 'ownership' ? STYLE_OWNERSHIP : STYLE_TAXDEFAULT;
+  const layer = L.geoJSON(
+    { type: 'FeatureCollection', features: matched },
+    {
+      style: () => ({ ...style }),
+      pointToLayer: (feature, latlng) =>
+        L.circleMarker(latlng, { radius: 5, ...style }),
+      onEachFeature: (feature, featureLayer) => {
+        featureLayer.on('click', () => showParcelModal(feature, layerType));
+      },
+    }
+  );
+  layer.addTo(map);
+  ls.layer = layer;
+  return true;
+}
+
 function addOwnershipLayer(geojson) {
   if (state.ownership.layer) {
     map.removeLayer(state.ownership.layer);
     state.ownership.layer = null;
   }
-
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (validFeatures.length === 0) {
-    // Attribute-only CSV — no spatial layer to draw
+    buildLayerFromCounty('ownership');
     return;
   }
-
   const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
     style: () => ({ ...STYLE_OWNERSHIP }),
     pointToLayer: (feature, latlng) =>
@@ -413,7 +482,6 @@ function addOwnershipLayer(geojson) {
       featureLayer.on('click', () => showParcelModal(feature, 'ownership'));
     },
   });
-
   layer.addTo(map);
   state.ownership.layer = layer;
 }
@@ -423,14 +491,14 @@ function addTaxDefaultLayer(geojson) {
     map.removeLayer(state.taxdefault.layer);
     state.taxdefault.layer = null;
   }
-
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (validFeatures.length === 0) {
-    // No geometry in the file — try to borrow shapes from the ownership layer
-    buildTaxDefaultPreviewFromOwnership();
+    // Try county first, then ownership as fallback
+    if (!buildLayerFromCounty('taxdefault')) {
+      buildTaxDefaultPreviewFromOwnership();
+    }
     return;
   }
-
   const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
     style: () => ({ ...STYLE_TAXDEFAULT }),
     pointToLayer: (feature, latlng) =>
@@ -439,38 +507,31 @@ function addTaxDefaultLayer(geojson) {
       featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
     },
   });
-
   layer.addTo(map);
   state.taxdefault.layer = layer;
 }
 
-// Build orange preview layer using ownership geometry for tax-default APNs.
-// Called when the tax default file has no geometry of its own.
+// Fallback: build tax default preview from ownership geometry when no county loaded.
 function buildTaxDefaultPreviewFromOwnership() {
   if (state.taxdefault.layer) {
     map.removeLayer(state.taxdefault.layer);
     state.taxdefault.layer = null;
   }
-
-  const owGJ  = state.ownership.geojson;
-  const tdGJ  = state.taxdefault.geojson;
+  const owGJ = state.ownership.geojson;
+  const tdGJ = state.taxdefault.geojson;
   if (!owGJ || !tdGJ || !state.ownership.idField || !state.taxdefault.idField) return;
 
-  // Build set of normalized tax-default APNs
   const tdIds = new Set(
-    (tdGJ.features || []).map(f =>
-      normalizeId((f.properties || {})[state.taxdefault.idField])
-    ).filter(Boolean)
+    (tdGJ.features || [])
+      .map(f => normalizeId((f.properties || {})[state.taxdefault.idField]))
+      .filter(Boolean)
   );
-
   if (!tdIds.size) return;
 
-  // Find ownership features whose APN is in the tax-default list
   const matched = (owGJ.features || []).filter(f => {
     const id = normalizeId((f.properties || {})[state.ownership.idField]);
     return id && tdIds.has(id);
   });
-
   if (!matched.length) return;
 
   const layer = L.geoJSON(
@@ -484,7 +545,6 @@ function buildTaxDefaultPreviewFromOwnership() {
       },
     }
   );
-
   layer.addTo(map);
   state.taxdefault.layer = layer;
 }
@@ -558,6 +618,15 @@ function runMatchAnalysis() {
       const ownershipFeatures  = ownershipGJ.features  || [];
       const taxdefaultFeatures = taxdefaultGJ.features || [];
 
+      // Build county lookup for geometry fallback
+      const countyById = new Map();
+      if (state.county.geojson && state.county.idField) {
+        (state.county.geojson.features || []).forEach(f => {
+          const id = normalizeId((f.properties || {})[state.county.idField]);
+          if (id && f.geometry) countyById.set(id, f);
+        });
+      }
+
       // --- ID-based matching ---
       if (matchById && state.ownership.idField && state.taxdefault.idField) {
         // Build lookup from ownership by normalized ID
@@ -576,8 +645,13 @@ function runMatchAnalysis() {
           const owFeature = ownershipById.get(id);
 
           // Use ownership geometry if available (more detailed), else taxdefault
-          const geom = (owFeature && owFeature.geometry) ? owFeature.geometry :
-                       tdFeature.geometry || null;
+          // Geometry priority: ownership → taxdefault → county shapefile
+          let geom = (owFeature && owFeature.geometry) ? owFeature.geometry
+                   : tdFeature.geometry || null;
+          if (!geom && countyById.size) {
+            const cf = countyById.get(id);
+            if (cf) geom = cf.geometry;
+          }
 
           const mergedProps = {
             ...(owFeature ? owFeature.properties : {}),
@@ -991,25 +1065,62 @@ function checkRunMatchEnabled() {
   }
 }
 
+function showNoGeomNotice(layerType, hasGeom) {
+  const notice   = document.getElementById(`${layerType}-no-geom-notice`);
+  const controls = document.getElementById(`${layerType}-controls`);
+  if (notice)   notice.style.display   = hasGeom ? 'none' : 'flex';
+  if (controls) controls.style.display = hasGeom ? 'flex' : 'none';
+}
+
 // ─── Layer Load Handler ───────────────────────────────────────────────────────
 
 async function handleLayerLoad(file, layerType) {
-  showLoading(`Loading ${layerType === 'ownership' ? 'Ownership' : 'Tax Default'} layer...`);
+  const labels = { county: 'County Shapefile', ownership: 'Ownership', taxdefault: 'Tax Default' };
+  showLoading(`Loading ${labels[layerType] || layerType}...`);
 
   try {
     const geojson = await parseFile(file);
     const fields  = getFields(geojson);
     const count   = (geojson.features || []).length;
+    const hasGeom = (geojson.features || []).some(f => f.geometry);
 
-    if (layerType === 'ownership') {
-      state.ownership.geojson = geojson;
-      state.ownership.fields  = fields;
-      state.ownership.idField = guessIdField(fields);
+    if (layerType === 'county') {
+      state.county.geojson  = geojson;
+      state.county.fields   = fields;
+      state.county.idField  = guessIdField(fields);
+
+      populateFieldSelect('county-id-field', fields, state.county.idField);
+      document.getElementById('county-field-map').style.display = 'block';
+      document.getElementById('county-controls').style.display  = 'flex';
+      document.getElementById('drop-county').classList.add('loaded');
+
+      addCountyLayer(geojson);
+      updateBadge('county', count);
+
+      if (state.county.layer) {
+        try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+      }
+
+      // Rebuild ownership/taxdefault layers that were waiting for county geometry
+      const owHasGeom = state.ownership.geojson &&
+        (state.ownership.geojson.features || []).some(f => f.geometry);
+      if (state.ownership.geojson && !owHasGeom) buildLayerFromCounty('ownership');
+
+      const tdHasGeom = state.taxdefault.geojson &&
+        (state.taxdefault.geojson.features || []).some(f => f.geometry);
+      if (state.taxdefault.geojson && !tdHasGeom) {
+        if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
+      }
+
+    } else if (layerType === 'ownership') {
+      state.ownership.geojson  = geojson;
+      state.ownership.fields   = fields;
+      state.ownership.idField  = guessIdField(fields);
 
       populateFieldSelect('ownership-id-field', fields, state.ownership.idField);
       document.getElementById('ownership-field-map').style.display = 'block';
-      document.getElementById('ownership-controls').style.display = 'flex';
       document.getElementById('drop-ownership').classList.add('loaded');
+      showNoGeomNotice('ownership', hasGeom);
 
       addOwnershipLayer(geojson);
       updateBadge('ownership', count);
@@ -1018,16 +1129,16 @@ async function handleLayerLoad(file, layerType) {
         try { map.fitBounds(state.ownership.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
       }
 
-      // If tax default is already loaded without geometry, build its preview now
+      // Rebuild taxdefault preview if it was using ownership geometry
       const tdHasGeom = state.taxdefault.geojson &&
         (state.taxdefault.geojson.features || []).some(f => f.geometry);
       if (state.taxdefault.geojson && !tdHasGeom) {
-        buildTaxDefaultPreviewFromOwnership();
+        if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
       }
 
-    } else {
-      state.taxdefault.geojson = geojson;
-      state.taxdefault.fields  = fields;
+    } else { // taxdefault
+      state.taxdefault.geojson     = geojson;
+      state.taxdefault.fields      = fields;
       state.taxdefault.idField     = guessIdField(fields);
       state.taxdefault.amountField = guessAmountField(fields);
       state.taxdefault.ownerField  = guessOwnerField(fields);
@@ -1037,17 +1148,11 @@ async function handleLayerLoad(file, layerType) {
       populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
 
       document.getElementById('taxdefault-field-map').style.display = 'block';
-      document.getElementById('taxdefault-controls').style.display = 'flex';
       document.getElementById('drop-taxdefault').classList.add('loaded');
+      showNoGeomNotice('taxdefault', hasGeom);
 
       addTaxDefaultLayer(geojson);
       updateBadge('taxdefault', count);
-
-      const hasGeom = (geojson.features || []).some(f => f.geometry);
-      const notice = document.getElementById('taxdefault-no-geom-notice');
-      const controls = document.getElementById('taxdefault-controls');
-      notice.style.display   = hasGeom ? 'none' : 'flex';
-      controls.style.display = hasGeom ? 'flex' : 'none';
 
       if (state.taxdefault.layer) {
         try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
@@ -1066,8 +1171,8 @@ async function handleLayerLoad(file, layerType) {
 
 // ─── Event Listeners ─────────────────────────────────────────────────────────
 
-// File inputs
-['ownership', 'taxdefault'].forEach(layerType => {
+// File inputs for all three layers
+['county', 'ownership', 'taxdefault'].forEach(layerType => {
   const fileInput = document.getElementById(`file-${layerType}`);
   const dropZone  = document.getElementById(`drop-${layerType}`);
 
@@ -1076,7 +1181,6 @@ async function handleLayerLoad(file, layerType) {
     e.target.value = '';
   });
 
-  // Drag and drop
   dropZone.addEventListener('dragover', e => {
     e.preventDefault();
     dropZone.classList.add('dragover');
@@ -1090,15 +1194,39 @@ async function handleLayerLoad(file, layerType) {
   });
 });
 
-// Field selectors — update state when user changes
+// Field selectors — update state and rebuild visual layers
+document.getElementById('county-id-field').addEventListener('change', e => {
+  state.county.idField = e.target.value;
+  // Rebuild any attribute-only layers that need county geometry
+  const owHasGeom = state.ownership.geojson &&
+    (state.ownership.geojson.features || []).some(f => f.geometry);
+  if (state.ownership.geojson && !owHasGeom) buildLayerFromCounty('ownership');
+  const tdHasGeom = state.taxdefault.geojson &&
+    (state.taxdefault.geojson.features || []).some(f => f.geometry);
+  if (state.taxdefault.geojson && !tdHasGeom) {
+    if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
+  }
+});
+
 document.getElementById('ownership-id-field').addEventListener('change', e => {
   state.ownership.idField = e.target.value;
-  buildTaxDefaultPreviewFromOwnership();
+  const owHasGeom = state.ownership.geojson &&
+    (state.ownership.geojson.features || []).some(f => f.geometry);
+  if (!owHasGeom) buildLayerFromCounty('ownership');
+  const tdHasGeom = state.taxdefault.geojson &&
+    (state.taxdefault.geojson.features || []).some(f => f.geometry);
+  if (state.taxdefault.geojson && !tdHasGeom) {
+    if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
+  }
 });
 
 document.getElementById('taxdefault-id-field').addEventListener('change', e => {
   state.taxdefault.idField = e.target.value;
-  buildTaxDefaultPreviewFromOwnership();
+  const tdHasGeom = state.taxdefault.geojson &&
+    (state.taxdefault.geojson.features || []).some(f => f.geometry);
+  if (!tdHasGeom) {
+    if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
+  }
 });
 
 document.getElementById('taxdefault-amount-field').addEventListener('change', e => {
@@ -1110,25 +1238,26 @@ document.getElementById('taxdefault-owner-field').addEventListener('change', e =
 });
 
 // Layer visibility toggles
-document.getElementById('toggle-ownership').addEventListener('change', e => {
-  if (!state.ownership.layer) return;
-  if (e.target.checked) state.ownership.layer.addTo(map);
-  else map.removeLayer(state.ownership.layer);
-});
-
-document.getElementById('toggle-taxdefault').addEventListener('change', e => {
-  if (!state.taxdefault.layer) return;
-  if (e.target.checked) state.taxdefault.layer.addTo(map);
-  else map.removeLayer(state.taxdefault.layer);
+['county', 'ownership', 'taxdefault'].forEach(lt => {
+  const toggle = document.getElementById(`toggle-${lt}`);
+  if (toggle) toggle.addEventListener('change', e => {
+    if (!state[lt].layer) return;
+    if (e.target.checked) state[lt].layer.addTo(map);
+    else map.removeLayer(state[lt].layer);
+  });
 });
 
 // Zoom to layer
+document.getElementById('btn-zoom-county').addEventListener('click', () => {
+  if (state.county.layer) {
+    try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+  }
+});
 document.getElementById('btn-zoom-ownership').addEventListener('click', () => {
   if (state.ownership.layer) {
     try { map.fitBounds(state.ownership.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
   }
 });
-
 document.getElementById('btn-zoom-taxdefault').addEventListener('click', () => {
   if (state.taxdefault.layer) {
     try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
@@ -1172,7 +1301,7 @@ document.getElementById('btn-basemap-toggle').addEventListener('click', () => {
 document.getElementById('btn-clear-all').addEventListener('click', () => {
   if (!confirm('Clear all loaded data and results?')) return;
 
-  ['ownership', 'taxdefault'].forEach(lt => {
+  ['county', 'ownership', 'taxdefault'].forEach(lt => {
     if (state[lt].layer) { map.removeLayer(state[lt].layer); state[lt].layer = null; }
     state[lt].geojson = null;
     state[lt].fields  = [];
@@ -1182,6 +1311,8 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
     document.getElementById(`badge-${lt}`).className = 'badge';
     document.getElementById(`${lt}-field-map`).style.display  = 'none';
     document.getElementById(`${lt}-controls`).style.display   = 'none';
+    const notice = document.getElementById(`${lt}-no-geom-notice`);
+    if (notice) notice.style.display = 'none';
   });
 
   state.taxdefault.amountField = null;

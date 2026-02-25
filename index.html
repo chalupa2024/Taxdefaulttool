@@ -9,10 +9,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Leaflet Draw -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-
   <!-- Shapefile support -->
   <script src="https://unpkg.com/shpjs@4.0.4/dist/shp.js"></script>
 
@@ -21,9 +17,6 @@
 
   <!-- SheetJS for Excel (.xlsx / .xls) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-  <!-- JSZip for zip file handling -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -37,7 +30,7 @@
       </svg>
       <div>
         <h1>Tax Default Parcel Mapper</h1>
-        <p class="header-subtitle">Upload ownership data &amp; identify tax-defaulted parcels</p>
+        <p class="header-subtitle">Identify tax-defaulted parcels to pursue</p>
       </div>
     </div>
     <div class="header-actions">
@@ -58,24 +51,57 @@
     <!-- Left Sidebar -->
     <aside class="sidebar">
 
-      <!-- Upload: Ownership Layer -->
+      <!-- Step 1: County Shapefile -->
+      <section class="panel" id="panel-county">
+        <div class="panel-header">
+          <div class="step-badge">1</div>
+          <div class="layer-dot dot-county"></div>
+          <h2>County Parcel Shapefile</h2>
+          <span class="badge" id="badge-county">Not loaded</span>
+        </div>
+        <p class="panel-desc">Upload the full county parcel shapefile. This provides geometry for all parcels and is used as the geometry source for spreadsheet uploads.</p>
+        <div class="upload-zone" id="drop-county" data-layer="county">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Drop file here or <label class="link-label" for="file-county">browse</label></span>
+          <span class="upload-hint">Shapefile (.zip), GeoJSON</span>
+          <input type="file" id="file-county" accept=".geojson,.json,.zip" />
+        </div>
+        <div class="field-map-row" id="county-field-map" style="display:none;">
+          <label>Parcel ID / APN field:
+            <select id="county-id-field"><option value="">— select —</option></select>
+          </label>
+        </div>
+        <div class="layer-controls" id="county-controls" style="display:none;">
+          <button class="btn btn-sm" id="btn-zoom-county">Zoom to layer</button>
+          <label class="toggle-label">
+            <input type="checkbox" id="toggle-county" checked /> Show layer
+          </label>
+        </div>
+      </section>
+
+      <!-- Step 2: Ownership File -->
       <section class="panel" id="panel-ownership">
         <div class="panel-header">
+          <div class="step-badge">2</div>
           <div class="layer-dot dot-ownership"></div>
-          <h2>Ownership Layer</h2>
+          <h2>Your Ownership File</h2>
           <span class="badge" id="badge-ownership">Not loaded</span>
         </div>
-        <p class="panel-desc">Upload your current land ownership parcel data.</p>
+        <p class="panel-desc">Upload your current land ownership data. Can be a shapefile, GeoJSON, or a spreadsheet of APNs (geometry pulled from county shapefile).</p>
         <div class="upload-zone" id="drop-ownership" data-layer="ownership">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Drop file here or <label class="link-label" for="file-ownership">browse</label></span>
-          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV, Excel (.xlsx)</span>
+          <span class="upload-hint">Shapefile (.zip), GeoJSON, CSV, Excel (.xlsx)</span>
           <input type="file" id="file-ownership" accept=".geojson,.json,.zip,.csv,.xlsx,.xls" />
         </div>
         <div class="field-map-row" id="ownership-field-map" style="display:none;">
-          <label>Parcel ID field:
+          <label>Parcel ID / APN field:
             <select id="ownership-id-field"><option value="">— select —</option></select>
           </label>
+        </div>
+        <div id="ownership-no-geom-notice" class="no-geom-notice" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          No geometry found — parcels will be drawn using the county shapefile.
         </div>
         <div class="layer-controls" id="ownership-controls" style="display:none;">
           <button class="btn btn-sm" id="btn-zoom-ownership">Zoom to layer</button>
@@ -85,22 +111,23 @@
         </div>
       </section>
 
-      <!-- Upload: Tax Default Layer -->
+      <!-- Step 3: Tax Default Spreadsheet -->
       <section class="panel" id="panel-taxdefault">
         <div class="panel-header">
+          <div class="step-badge">3</div>
           <div class="layer-dot dot-taxdefault"></div>
-          <h2>Tax Default Layer</h2>
+          <h2>Tax Default List</h2>
           <span class="badge" id="badge-taxdefault">Not loaded</span>
         </div>
-        <p class="panel-desc">Upload the county tax default parcel list.</p>
+        <p class="panel-desc">Upload the county tax default parcel list. A spreadsheet of APNs is fine — geometry is pulled from the county shapefile.</p>
         <div class="upload-zone" id="drop-taxdefault" data-layer="taxdefault">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Drop file here or <label class="link-label" for="file-taxdefault">browse</label></span>
-          <span class="upload-hint">GeoJSON, Shapefile (.zip), CSV, Excel (.xlsx)</span>
+          <span class="upload-hint">Excel (.xlsx), CSV, Shapefile (.zip), GeoJSON</span>
           <input type="file" id="file-taxdefault" accept=".geojson,.json,.zip,.csv,.xlsx,.xls" />
         </div>
         <div class="field-map-row" id="taxdefault-field-map" style="display:none;">
-          <label>Parcel ID field:
+          <label>Parcel ID / APN field:
             <select id="taxdefault-id-field"><option value="">— select —</option></select>
           </label>
           <label>Amount Due field (optional):
@@ -112,7 +139,7 @@
         </div>
         <div id="taxdefault-no-geom-notice" class="no-geom-notice" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Spreadsheet loaded — no map geometry found. Parcels will be matched by APN/ID against your ownership layer. Click <strong>Run Match Analysis</strong> below.
+          No geometry found — parcels will be drawn using the county shapefile.
         </div>
         <div class="layer-controls" id="taxdefault-controls" style="display:none;">
           <button class="btn btn-sm" id="btn-zoom-taxdefault">Zoom to layer</button>
@@ -122,11 +149,12 @@
         </div>
       </section>
 
-      <!-- Match Configuration -->
+      <!-- Match -->
       <section class="panel" id="panel-match">
         <div class="panel-header">
+          <div class="step-badge">4</div>
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <h2>Match &amp; Filter</h2>
+          <h2>Match &amp; Identify</h2>
         </div>
         <div class="match-options">
           <label class="toggle-label" title="Match parcels by shared parcel ID / APN">
@@ -134,7 +162,7 @@
             Match by Parcel ID / APN
           </label>
           <label class="toggle-label" title="Highlight parcels that spatially overlap">
-            <input type="checkbox" id="match-by-spatial" checked />
+            <input type="checkbox" id="match-by-spatial" />
             Highlight spatial overlap
           </label>
         </div>
@@ -151,9 +179,10 @@
           <h2>Legend</h2>
         </div>
         <div class="legend-items">
-          <div class="legend-item"><span class="swatch swatch-ownership"></span> Ownership parcels</div>
+          <div class="legend-item"><span class="swatch swatch-county"></span> All county parcels</div>
+          <div class="legend-item"><span class="swatch swatch-ownership"></span> Your ownership parcels</div>
           <div class="legend-item"><span class="swatch swatch-taxdefault"></span> Tax default parcels</div>
-          <div class="legend-item"><span class="swatch swatch-matched"></span> Matched / Pursue</div>
+          <div class="legend-item"><span class="swatch swatch-matched"></span> Matched — pursue these</div>
         </div>
       </section>
 

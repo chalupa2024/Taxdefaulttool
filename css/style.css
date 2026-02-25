@@ -19,6 +19,7 @@
   --color-warning: #f59e0b;
 
   /* Layer colours */
+  --color-county: #64748b;
   --color-ownership: #60a5fa;
   --color-taxdefault: #f97316;
   --color-matched: #a855f7;
@@ -139,12 +140,28 @@ html, body {
   line-height: 1.5;
 }
 
+/* ---- Step badge ---- */
+.step-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .layer-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
+.dot-county     { background: var(--color-county); }
 .dot-ownership  { background: var(--color-ownership); }
 .dot-taxdefault { background: var(--color-taxdefault); }
 .dot-matched    { background: var(--color-matched); }
@@ -310,6 +327,7 @@ html, body {
   border-radius: 2px;
   flex-shrink: 0;
 }
+.swatch-county     { background: var(--color-county);     border: 1px solid rgba(100,116,139,0.5); }
 .swatch-ownership  { background: var(--color-ownership);  border: 1px solid rgba(96,165,250,0.5); }
 .swatch-taxdefault { background: var(--color-taxdefault); border: 1px solid rgba(249,115,22,0.5); }
 .swatch-matched    { background: var(--color-matched);    border: 1px solid rgba(168,85,247,0.5); }
