@@ -1,0 +1,69 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.498, 37.502], [-120.494, 37.502], [-120.494, 37.498], [-120.498, 37.498], [-120.498, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-002",
+        "OWNER_NAME": "Garcia, Maria",
+        "AMOUNT_DUE": 4250.00,
+        "YEARS_DEFAULTED": 3,
+        "DEFAULT_DATE": "2021-01-15"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.502, 37.498], [-120.498, 37.498], [-120.498, 37.494], [-120.502, 37.494], [-120.502, 37.498]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-004",
+        "OWNER_NAME": "Johnson, Lisa R",
+        "AMOUNT_DUE": 8920.75,
+        "YEARS_DEFAULTED": 5,
+        "DEFAULT_DATE": "2019-06-01"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.490, 37.502], [-120.486, 37.502], [-120.486, 37.494], [-120.490, 37.494], [-120.490, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-007",
+        "OWNER_NAME": "Davis Holdings LLC",
+        "AMOUNT_DUE": 22100.50,
+        "YEARS_DEFAULTED": 2,
+        "DEFAULT_DATE": "2022-03-10"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.502, 37.494], [-120.496, 37.494], [-120.496, 37.488], [-120.502, 37.488], [-120.502, 37.494]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-008",
+        "OWNER_NAME": "Martinez, Carlos",
+        "AMOUNT_DUE": 3100.00,
+        "YEARS_DEFAULTED": 4,
+        "DEFAULT_DATE": "2020-08-22"
+      }
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.502, 37.502], [-120.498, 37.502], [-120.498, 37.498], [-120.502, 37.498], [-120.502, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-001",
+        "OWNER_NAME": "Smith, John A",
+        "SITE_ADDR": "100 Oak Street",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.25,
+        "ASSESSED_VALUE": 185000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.498, 37.502], [-120.494, 37.502], [-120.494, 37.498], [-120.498, 37.498], [-120.498, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-002",
+        "OWNER_NAME": "Garcia, Maria",
+        "SITE_ADDR": "104 Oak Street",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.25,
+        "ASSESSED_VALUE": 210000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.494, 37.502], [-120.490, 37.502], [-120.490, 37.498], [-120.494, 37.498], [-120.494, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-003",
+        "OWNER_NAME": "Lee, David",
+        "SITE_ADDR": "108 Oak Street",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.25,
+        "ASSESSED_VALUE": 195000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.502, 37.498], [-120.498, 37.498], [-120.498, 37.494], [-120.502, 37.494], [-120.502, 37.498]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-004",
+        "OWNER_NAME": "Johnson, Lisa R",
+        "SITE_ADDR": "112 Pine Avenue",
+        "CITY": "Anytown",
+        "LAND_USE": "Vacant - Residential",
+        "ACRES": 0.25,
+        "ASSESSED_VALUE": 75000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.498, 37.498], [-120.494, 37.498], [-120.494, 37.494], [-120.498, 37.494], [-120.498, 37.498]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-005",
+        "OWNER_NAME": "Williams, Robert",
+        "SITE_ADDR": "116 Pine Avenue",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.25,
+        "ASSESSED_VALUE": 220000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.494, 37.498], [-120.490, 37.498], [-120.490, 37.494], [-120.494, 37.494], [-120.494, 37.498]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-006",
+        "OWNER_NAME": "Brown, Patricia",
+        "SITE_ADDR": "120 Pine Avenue",
+        "CITY": "Anytown",
+        "LAND_USE": "Multi-Family Residential",
+        "ACRES": 0.30,
+        "ASSESSED_VALUE": 310000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.490, 37.502], [-120.486, 37.502], [-120.486, 37.494], [-120.490, 37.494], [-120.490, 37.502]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-007",
+        "OWNER_NAME": "Davis Holdings LLC",
+        "SITE_ADDR": "200 Commerce Blvd",
+        "CITY": "Anytown",
+        "LAND_USE": "Commercial",
+        "ACRES": 0.50,
+        "ASSESSED_VALUE": 480000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.502, 37.494], [-120.496, 37.494], [-120.496, 37.488], [-120.502, 37.488], [-120.502, 37.494]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-008",
+        "OWNER_NAME": "Martinez, Carlos",
+        "SITE_ADDR": "300 Elm Road",
+        "CITY": "Anytown",
+        "LAND_USE": "Vacant - Agricultural",
+        "ACRES": 1.50,
+        "ASSESSED_VALUE": 95000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.496, 37.494], [-120.490, 37.494], [-120.490, 37.488], [-120.496, 37.488], [-120.496, 37.494]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-009",
+        "OWNER_NAME": "Thompson, Sandra",
+        "SITE_ADDR": "310 Elm Road",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.35,
+        "ASSESSED_VALUE": 175000
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-120.490, 37.494], [-120.484, 37.494], [-120.484, 37.488], [-120.490, 37.488], [-120.490, 37.494]
+        ]]
+      },
+      "properties": {
+        "APN": "123-456-010",
+        "OWNER_NAME": "Anderson, James W",
+        "SITE_ADDR": "320 Elm Road",
+        "CITY": "Anytown",
+        "LAND_USE": "Single Family Residential",
+        "ACRES": 0.30,
+        "ASSESSED_VALUE": 198000
+      }
+    }
+  ]
+}
