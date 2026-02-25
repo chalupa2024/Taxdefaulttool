@@ -774,6 +774,28 @@ html, body {
 .popup-label { color: var(--color-text-muted); font-size: 12px; }
 .popup-value { font-size: 12px; font-weight: 500; }
 
+.popup-amount {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 4px;
+  padding: 6px 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+}
+.popup-amount-label {
+  font-size: 10px;
+  color: var(--color-warning);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.popup-amount-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-warning);
+}
+
 .popup-tag {
   display: inline-block;
   margin-top: 8px;

@@ -157,13 +157,13 @@
           <h2>Match &amp; Identify</h2>
         </div>
         <div class="match-options">
-          <label class="toggle-label" title="Match parcels by shared parcel ID / APN">
+          <label class="toggle-label" title="Also find parcels that share an ID / APN with your ownership data">
             <input type="checkbox" id="match-by-id" checked />
-            Match by Parcel ID / APN
+            Match owned parcels by APN
           </label>
-          <label class="toggle-label" title="Highlight parcels that spatially overlap">
-            <input type="checkbox" id="match-by-spatial" />
-            Highlight spatial overlap
+          <label class="toggle-label" title="Find tax default parcels that share a boundary edge with your ownership parcels">
+            <input type="checkbox" id="match-by-touching" checked />
+            Find parcels touching your ownership
           </label>
         </div>
         <button id="btn-run-match" class="btn btn-primary btn-full" disabled>

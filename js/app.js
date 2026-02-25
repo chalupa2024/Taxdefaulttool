@@ -572,10 +572,17 @@ function addMatchedLayer(matchedFeatures) {
         const amount = state.taxdefault.amountField ? props[state.taxdefault.amountField] : null;
         const owner = state.taxdefault.ownerField ? props[state.taxdefault.ownerField] : null;
 
+        const amountDisplay = amount
+          ? `<div class="popup-amount">
+               <span class="popup-amount-label">Tax Default Amount</span>
+               <span class="popup-amount-value">${formatCurrency(amount)}</span>
+             </div>`
+          : '';
+
         const popupContent = `
           <div class="popup-title">${apn || 'Parcel'}</div>
           ${owner ? `<div class="popup-row"><span class="popup-label">Owner</span><span class="popup-value">${owner}</span></div>` : ''}
-          ${amount ? `<div class="popup-row"><span class="popup-label">Amount Due</span><span class="popup-value" style="color:#f59e0b">${formatCurrency(amount)}</span></div>` : ''}
+          ${amountDisplay}
           <span class="popup-tag">${props._matchType || 'Matched'}</span>
           <button class="popup-btn" onclick="showParcelModalById('${apn}')">View full details →</button>
         `;
@@ -591,10 +598,10 @@ function addMatchedLayer(matchedFeatures) {
 // ─── Match Logic ─────────────────────────────────────────────────────────────
 
 function runMatchAnalysis() {
-  const matchById = document.getElementById('match-by-id').checked;
-  const matchBySpatial = document.getElementById('match-by-spatial').checked;
+  const matchById       = document.getElementById('match-by-id').checked;
+  const matchByTouching = document.getElementById('match-by-touching').checked;
 
-  if (!matchById && !matchBySpatial) {
+  if (!matchById && !matchByTouching) {
     setMatchStatus('Select at least one match method.', 'error');
     return;
   }
@@ -667,56 +674,61 @@ function runMatchAnalysis() {
         });
       }
 
-      // --- Spatial matching (bounding box pre-filter + centroid point-in-polygon) ---
-      if (matchBySpatial) {
-        const tdWithGeom  = taxdefaultFeatures.filter(f => f.geometry);
-        const ownWithGeom = ownershipFeatures.filter(f => f.geometry);
+      // --- Helper: resolve geometry from the feature itself or county by APN ---
+      const resolveGeom = (feature, layerType) => {
+        if (feature.geometry) return feature.geometry;
+        if (!countyById.size) return null;
+        const idField = layerType === 'ownership' ? state.ownership.idField : state.taxdefault.idField;
+        if (!idField) return null;
+        const id = normalizeId((feature.properties || {})[idField]);
+        const cf = id ? countyById.get(id) : null;
+        return cf ? cf.geometry : null;
+      };
 
-        if (tdWithGeom.length > 0 && ownWithGeom.length > 0) {
-          tdWithGeom.forEach(tdFeature => {
-            const tdBbox = getBbox(tdFeature.geometry);
-            if (!tdBbox) return;
+      // Encode a coordinate pair to a lookup key (6 dp ≈ 0.1 m precision)
+      const coord2key = (x, y) => `${x.toFixed(6)},${y.toFixed(6)}`;
 
-            ownWithGeom.forEach(owFeature => {
-              const owBbox = getBbox(owFeature.geometry);
-              if (!owBbox) return;
+      // --- Touching / Adjacent matching ---
+      // Find all tax-default parcels that share at least one boundary vertex
+      // with any of the user's ownership parcels.
+      if (matchByTouching) {
+        // Build a set of every boundary coordinate from every ownership parcel
+        const owBoundaryCoords = new Set();
+        ownershipFeatures.forEach(f => {
+          const geom = resolveGeom(f, 'ownership');
+          if (!geom) return;
+          getAllCoords(geom).forEach(([x, y]) => owBoundaryCoords.add(coord2key(x, y)));
+        });
 
-              // Bounding-box pre-filter
-              if (!bboxesOverlap(tdBbox, owBbox)) return;
+        if (owBoundaryCoords.size) {
+          taxdefaultFeatures.forEach(tdFeature => {
+            const tdIdField = state.taxdefault.idField;
+            const tdId = tdIdField
+              ? normalizeId((tdFeature.properties || {})[tdIdField])
+              : null;
 
-              // Check if centroids are close or if TD centroid is inside OW polygon
-              const tdCenter = getCentroid(tdFeature.geometry);
-              const owCenter = getCentroid(owFeature.geometry);
-              if (!tdCenter || !owCenter) return;
+            // Skip if already captured by ID match
+            if (tdId && seenIds.has(tdId)) return;
 
-              let spatialMatch = false;
+            const geom = resolveGeom(tdFeature, 'taxdefault');
+            if (!geom) return;
 
-              // Point-in-polygon for polygonal ownership
-              if (owFeature.geometry.type === 'Polygon' || owFeature.geometry.type === 'MultiPolygon') {
-                spatialMatch = pointInGeoJSON(tdCenter, owFeature);
-              } else {
-                // For non-polygon, use proximity (within ~50m at zoom)
-                const dist = haversineDist(tdCenter[1], tdCenter[0], owCenter[1], owCenter[0]);
-                spatialMatch = dist < 0.05; // 50 metres
-              }
+            // Check if this parcel shares any boundary coord with our ownership
+            const tdCoords = getAllCoords(geom);
+            const touches  = tdCoords.some(([x, y]) => owBoundaryCoords.has(coord2key(x, y)));
+            if (!touches) return;
 
-              if (spatialMatch) {
-                const idField = state.ownership.idField;
-                const id = idField ? normalizeId((owFeature.properties || {})[idField]) : null;
+            if (tdId) seenIds.add(tdId);
 
-                if (id && seenIds.has(id)) return; // already matched by ID
-                const dedupKey = id || (tdCenter[0] + ',' + tdCenter[1]);
-                if (seenIds.has(dedupKey)) return;
-                seenIds.add(dedupKey);
-
-                const mergedProps = {
-                  ...owFeature.properties,
-                  ...tdFeature.properties,
-                  _matchType: 'Spatial Overlap',
-                };
-                results.push({ type: 'Feature', geometry: owFeature.geometry || tdFeature.geometry, properties: mergedProps });
-              }
-            });
+            // Pull extra county context if available
+            const countyFeature = (tdId && countyById.size) ? countyById.get(tdId) : null;
+            const mergedProps = {
+              ...(countyFeature ? countyFeature.properties : {}),
+              ...tdFeature.properties,
+              _matchType: 'Adjacent / Touching',
+              _matchedApn: tdId || '',
+            };
+            results.push({ type: 'Feature', geometry: geom, properties: mergedProps });
           });
         }
       }
@@ -919,10 +931,18 @@ function renderResultsList(features, filter = '') {
 }
 
 function updateMatchStatus(count) {
-  const msg = count === 0
-    ? 'No matches found. Try adjusting fields or match options.'
-    : `Found ${count} matching parcel${count !== 1 ? 's' : ''}.`;
-  setMatchStatus(msg, count > 0 ? 'success' : 'warning');
+  if (count === 0) {
+    setMatchStatus('No matches found. Try adjusting fields or match options.', 'warning');
+    return;
+  }
+  const results  = state.matched;
+  const nId      = results.filter(f => (f.properties || {})._matchType === 'ID Match').length;
+  const nTouch   = results.filter(f => (f.properties || {})._matchType === 'Adjacent / Touching').length;
+  const parts    = [];
+  if (nId)    parts.push(`${nId} owned`);
+  if (nTouch) parts.push(`${nTouch} touching`);
+  const detail   = parts.length ? ` (${parts.join(', ')})` : '';
+  setMatchStatus(`Found ${count} parcel${count !== 1 ? 's' : ''}${detail} — see results panel.`, 'success');
 }
 
 function setMatchStatus(msg, type = '') {
