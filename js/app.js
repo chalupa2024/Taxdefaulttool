@@ -61,7 +61,7 @@ let basemapLayer = null;
 
 const COUNTY_CATALOG = {
   california: [
-    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: '' },
+    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip' },
     { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '' },
     { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '' },
