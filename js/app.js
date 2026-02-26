@@ -459,10 +459,12 @@ function addCountyLayer(geojson) {
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (!validFeatures.length) return;
 
+  const renderer = L.canvas({ padding: 0.5 });
   const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+    renderer,
     style: () => ({ ...STYLE_COUNTY }),
     pointToLayer: (feature, latlng) =>
-      L.circleMarker(latlng, { radius: 3, ...STYLE_COUNTY }),
+      L.circleMarker(latlng, { radius: 3, renderer, ...STYLE_COUNTY }),
   });
   layer.addTo(map);
   state.county.layer = layer;
