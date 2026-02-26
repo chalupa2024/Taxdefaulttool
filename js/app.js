@@ -58,8 +58,17 @@ let basemapLayer = null;
 // ─── Canvas Renderer (much faster than SVG for large datasets) ────────────────
 const canvasRenderer = L.canvas({ padding: 0.5 });
 
-// ─── Web Worker: off-thread shapefile / GeoJSON parsing ───────────────────────
-// Runs shpjs in a worker so the main thread never freezes, even for LA County.
+// ─── Web Worker: off-thread parsing with automatic main-thread fallback ────────
+//
+// Problems solved:
+//   1. importScripts in a blob worker can be blocked by CSP/browser → onerror
+//      catches this and every pending job retries on the main thread.
+//   2. Very large postMessage transfers (LA County ~2.3M features) crash tabs →
+//      worker refuses files above MAX_WORKER_FEATURES with a clear error.
+//   3. Worker hangs (no response) → per-job timeout falls back to main thread.
+
+const MAX_WORKER_FEATURES = 500000; // above this the structured-clone OOMs the tab
+
 const _WORKER_SRC = `
 importScripts('https://unpkg.com/shpjs@4.0.4/dist/shp.js');
 self.onmessage = async function({ data: { id, buffer, ext } }) {
@@ -68,41 +77,102 @@ self.onmessage = async function({ data: { id, buffer, ext } }) {
     if (ext === 'zip') {
       gj = await shp(buffer);
       if (Array.isArray(gj)) {
-        gj = { type: 'FeatureCollection', features: gj.flatMap(f => f.features || []) };
+        gj = { type:'FeatureCollection', features: gj.flatMap(f => f.features || []) };
       }
     } else {
       const text = new TextDecoder().decode(buffer);
       gj = JSON.parse(text);
-      if (gj.type === 'Feature') gj = { type: 'FeatureCollection', features: [gj] };
-      if (Array.isArray(gj)) gj = { type: 'FeatureCollection', features: gj };
+      if (gj.type === 'Feature') gj = { type:'FeatureCollection', features:[gj] };
+      if (Array.isArray(gj))     gj = { type:'FeatureCollection', features: gj };
     }
     if (!gj.features) gj.features = [];
+    const n = gj.features.length;
+    if (n > ${MAX_WORKER_FEATURES}) {
+      self.postMessage({ id, error:
+        'File has ' + n.toLocaleString() + ' features — too large for browser processing. ' +
+        'Please clip to your area of interest in QGIS or ArcGIS before uploading.'
+      });
+      return;
+    }
     self.postMessage({ id, gj });
   } catch (e) {
     self.postMessage({ id, error: e.message });
   }
 };`;
-const _parseWorker = new Worker(
-  URL.createObjectURL(new Blob([_WORKER_SRC], { type: 'text/javascript' }))
-);
+
+let _parseWorker = null;
+let _workerFailed = false;
+try {
+  _parseWorker = new Worker(
+    URL.createObjectURL(new Blob([_WORKER_SRC], { type: 'text/javascript' }))
+  );
+} catch (e) {
+  console.warn('Worker creation failed, using main-thread parsing:', e);
+  _workerFailed = true;
+}
+
 const _pending = new Map();
 let _seq = 0;
-_parseWorker.onmessage = ({ data: { id, gj, error } }) => {
-  const job = _pending.get(id);
-  _pending.delete(id);
-  if (job) (error ? job.reject(new Error(error)) : job.resolve(gj));
-};
+
+if (_parseWorker) {
+  _parseWorker.onmessage = ({ data: { id, gj, error } }) => {
+    const job = _pending.get(id);
+    _pending.delete(id);
+    if (!job) return;
+    clearTimeout(job.timer);
+    error ? job.reject(new Error(error)) : job.resolve(gj);
+  };
+
+  // If importScripts or any top-level worker code fails, fall back every
+  // pending job to main-thread parsing so nothing silently disappears.
+  _parseWorker.onerror = (ev) => {
+    console.warn('Parse worker error, switching to main-thread parsing:', ev.message);
+    _workerFailed = true;
+    _pending.forEach(job => {
+      clearTimeout(job.timer);
+      _parseMainThread(job.file).then(job.resolve).catch(job.reject);
+    });
+    _pending.clear();
+  };
+}
+
+// Main-thread fallback (original synchronous approach)
+async function _parseMainThread(file) {
+  const n = file.name.toLowerCase();
+  if (n.endsWith('.zip'))                         return parseShapefile(file);
+  if (n.endsWith('.geojson') || n.endsWith('.json')) return parseGeoJSON(file);
+  throw new Error('Unsupported type for main-thread parsing');
+}
+
 function _parseInWorker(file) {
+  if (_workerFailed || !_parseWorker) return _parseMainThread(file);
+
   return new Promise((resolve, reject) => {
     const id  = ++_seq;
     const ext = file.name.split('.').pop().toLowerCase();
-    _pending.set(id, { resolve, reject });
+
+    // 60-second watchdog → fall back to main thread
+    const timer = setTimeout(() => {
+      if (!_pending.has(id)) return;
+      _pending.delete(id);
+      console.warn('Worker timed out for', file.name, '— retrying on main thread');
+      _parseMainThread(file).then(resolve).catch(reject);
+    }, 60000);
+
+    _pending.set(id, { resolve, reject, file, timer });
+
     const reader = new FileReader();
-    reader.onload  = e => {
+    reader.onload = e => {
       const buf = e.target.result;
-      _parseWorker.postMessage({ id, buffer: buf, ext }, [buf]); // zero-copy transfer
+      try {
+        _parseWorker.postMessage({ id, buffer: buf, ext }, [buf]); // zero-copy transfer
+      } catch (err) {
+        clearTimeout(timer);
+        _pending.delete(id);
+        _parseMainThread(file).then(resolve).catch(reject);
+      }
     };
-    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onerror = () => { clearTimeout(timer); _pending.delete(id); reject(new Error('Failed to read file')); };
     reader.readAsArrayBuffer(file);
   });
 }
@@ -463,6 +533,27 @@ function extractRings(wkt) {
     rings.push(pts);
   }
   return rings;
+}
+
+// ─── Bounds computation (works without a Leaflet layer) ───────────────────────
+// Samples up to 5 000 features to keep it fast on large datasets.
+
+function computeGeoJSONBounds(geojson) {
+  const features = geojson?.features;
+  if (!features?.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const step = Math.max(1, Math.floor(features.length / 5000));
+  for (let i = 0; i < features.length; i += step) {
+    const f = features[i];
+    if (!f.geometry) continue;
+    try {
+      getAllCoords(f.geometry).forEach(([x, y]) => {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      });
+    } catch (_) {}
+  }
+  return isFinite(minX) ? L.latLngBounds([[minY, minX], [maxY, maxX]]) : null;
 }
 
 // ─── Geometry Simplification (Ramer-Douglas-Peucker) ─────────────────────────
@@ -1211,9 +1302,15 @@ async function handleLayerLoad(file, layerType) {
       addCountyLayer(geojson);
       updateBadge('county', count);
 
-      if (state.county.layer) {
-        try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
-      }
+      // Zoom to county extent regardless of whether the layer was rendered.
+      // For large/index-only counties state.county.layer is null, so we compute
+      // bounds directly from the GeoJSON (sampled, fast even for 2M+ features).
+      try {
+        const bounds = state.county.layer
+          ? state.county.layer.getBounds()
+          : computeGeoJSONBounds(geojson);
+        if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+      } catch (_) {}
 
       // Rebuild ownership/taxdefault layers that were waiting for county geometry
       const owHasGeom = state.ownership.geojson &&
