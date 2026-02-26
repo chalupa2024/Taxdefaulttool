@@ -55,6 +55,58 @@ const BASEMAPS = [
 
 let basemapLayer = null;
 
+// ─── Canvas Renderer (much faster than SVG for large datasets) ────────────────
+const canvasRenderer = L.canvas({ padding: 0.5 });
+
+// ─── Web Worker: off-thread shapefile / GeoJSON parsing ───────────────────────
+// Runs shpjs in a worker so the main thread never freezes, even for LA County.
+const _WORKER_SRC = `
+importScripts('https://unpkg.com/shpjs@4.0.4/dist/shp.js');
+self.onmessage = async function({ data: { id, buffer, ext } }) {
+  try {
+    let gj;
+    if (ext === 'zip') {
+      gj = await shp(buffer);
+      if (Array.isArray(gj)) {
+        gj = { type: 'FeatureCollection', features: gj.flatMap(f => f.features || []) };
+      }
+    } else {
+      const text = new TextDecoder().decode(buffer);
+      gj = JSON.parse(text);
+      if (gj.type === 'Feature') gj = { type: 'FeatureCollection', features: [gj] };
+      if (Array.isArray(gj)) gj = { type: 'FeatureCollection', features: gj };
+    }
+    if (!gj.features) gj.features = [];
+    self.postMessage({ id, gj });
+  } catch (e) {
+    self.postMessage({ id, error: e.message });
+  }
+};`;
+const _parseWorker = new Worker(
+  URL.createObjectURL(new Blob([_WORKER_SRC], { type: 'text/javascript' }))
+);
+const _pending = new Map();
+let _seq = 0;
+_parseWorker.onmessage = ({ data: { id, gj, error } }) => {
+  const job = _pending.get(id);
+  _pending.delete(id);
+  if (job) (error ? job.reject(new Error(error)) : job.resolve(gj));
+};
+function _parseInWorker(file) {
+  return new Promise((resolve, reject) => {
+    const id  = ++_seq;
+    const ext = file.name.split('.').pop().toLowerCase();
+    _pending.set(id, { resolve, reject });
+    const reader = new FileReader();
+    reader.onload  = e => {
+      const buf = e.target.result;
+      _parseWorker.postMessage({ id, buffer: buf, ext }, [buf]); // zero-copy transfer
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 // ─── Map Initialization ───────────────────────────────────────────────────────
 
 const map = L.map('map', {
@@ -218,19 +270,12 @@ function populateOptionalFieldSelect(selectId, fields, guessed) {
 
 async function parseFile(file) {
   const name = file.name.toLowerCase();
-
-  if (name.endsWith('.geojson') || name.endsWith('.json')) {
-    return parseGeoJSON(file);
+  // Shapefiles and GeoJSON are parsed off the main thread via Web Worker
+  if (name.endsWith('.zip') || name.endsWith('.geojson') || name.endsWith('.json')) {
+    return _parseInWorker(file);
   }
-  if (name.endsWith('.zip')) {
-    return parseShapefile(file);
-  }
-  if (name.endsWith('.csv')) {
-    return parseCSV(file);
-  }
-  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-    return parseExcel(file);
-  }
+  if (name.endsWith('.csv'))                    return parseCSV(file);
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) return parseExcel(file);
   throw new Error('Unsupported file type. Use GeoJSON, Shapefile (.zip), CSV, or Excel (.xlsx).');
 }
 
@@ -420,6 +465,52 @@ function extractRings(wkt) {
   return rings;
 }
 
+// ─── Geometry Simplification (Ramer-Douglas-Peucker) ─────────────────────────
+// Used to reduce vertex count before rendering large layers in Leaflet.
+
+function _rdp(pts, eps) {
+  if (pts.length <= 2) return pts;
+  let maxD = 0, maxI = 0;
+  const [x1, y1] = pts[0], [x2, y2] = pts[pts.length - 1];
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i];
+    const d = len < 1e-12
+      ? Math.hypot(px - x1, py - y1)
+      : Math.abs((y2 - y1) * px - (x2 - x1) * py + x2 * y1 - y2 * x1) / len;
+    if (d > maxD) { maxD = d; maxI = i; }
+  }
+  if (maxD > eps) {
+    return [..._rdp(pts.slice(0, maxI + 1), eps).slice(0, -1), ..._rdp(pts.slice(maxI), eps)];
+  }
+  return [pts[0], pts[pts.length - 1]];
+}
+
+function _simplifyGeom(geom, eps) {
+  if (!geom) return geom;
+  const sr = ring => { const s = _rdp(ring, eps); return s.length >= 4 ? s : ring; };
+  if (geom.type === 'Polygon')
+    return { ...geom, coordinates: geom.coordinates.map(sr) };
+  if (geom.type === 'MultiPolygon')
+    return { ...geom, coordinates: geom.coordinates.map(poly => poly.map(sr)) };
+  return geom;
+}
+
+// Simplify a GeoJSON FeatureCollection for display only.
+// eps ≈ 0.0001° ≈ 10 m — imperceptible at county zoom levels.
+function simplifyForDisplay(geojson, eps = 0.0001) {
+  if (!geojson?.features) return geojson;
+  return {
+    ...geojson,
+    features: geojson.features.map(f => ({ ...f, geometry: _simplifyGeom(f.geometry, eps) })),
+  };
+}
+
+// Apply simplification when the feature count exceeds this threshold.
+const SIMPLIFY_ABOVE = 15000;
+// County layers with more features than this are indexed only — not rendered.
+const COUNTY_RENDER_LIMIT = 60000;
+
 // ─── Layer Management ─────────────────────────────────────────────────────────
 
 function addCountyLayer(geojson) {
@@ -430,13 +521,36 @@ function addCountyLayer(geojson) {
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (!validFeatures.length) return;
 
-  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+  // Large county datasets (e.g. LA County ~2.3M parcels) must NOT be rendered —
+  // doing so would crash the browser. They are used purely as a geometry lookup.
+  if (validFeatures.length > COUNTY_RENDER_LIMIT) {
+    const badge = document.getElementById('badge-county');
+    badge.textContent = `${validFeatures.length.toLocaleString()} parcels — indexed`;
+    badge.className   = 'badge loaded';
+    // Hide controls since there's nothing to toggle/zoom
+    document.getElementById('county-controls').style.display = 'none';
+    return;
+  }
+
+  // Smaller county files can be rendered; simplify if needed.
+  const displayGJ = validFeatures.length > SIMPLIFY_ABOVE
+    ? simplifyForDisplay({ type: 'FeatureCollection', features: validFeatures })
+    : { type: 'FeatureCollection', features: validFeatures };
+
+  const layer = L.geoJSON(displayGJ, {
+    renderer: canvasRenderer,
     style: () => ({ ...STYLE_COUNTY }),
     pointToLayer: (feature, latlng) =>
-      L.circleMarker(latlng, { radius: 3, ...STYLE_COUNTY }),
+      L.circleMarker(latlng, { radius: 3, renderer: canvasRenderer, ...STYLE_COUNTY }),
   });
   layer.addTo(map);
   state.county.layer = layer;
+}
+
+// Helper: prepare a feature list for display — simplify if large.
+function _displayFC(features) {
+  const fc = { type: 'FeatureCollection', features };
+  return features.length > SIMPLIFY_ABOVE ? simplifyForDisplay(fc) : fc;
 }
 
 function addConservationLayer(geojson) {
@@ -447,28 +561,27 @@ function addConservationLayer(geojson) {
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (!validFeatures.length) return;
 
-  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+  const layer = L.geoJSON(_displayFC(validFeatures), {
+    renderer: canvasRenderer,
     style: () => ({ ...STYLE_CONSERVATION }),
     pointToLayer: (feature, latlng) =>
-      L.circleMarker(latlng, { radius: 5, ...STYLE_CONSERVATION }),
+      L.circleMarker(latlng, { radius: 5, renderer: canvasRenderer, ...STYLE_CONSERVATION }),
     onEachFeature: (feature, featureLayer) => {
       const props    = feature.properties || {};
       const nameVal  = state.conservation.nameField ? props[state.conservation.nameField] : null;
       const fallback = Object.values(props).find(v => v && typeof v === 'string' && v.length > 1);
-      const label    = nameVal || fallback || 'Conservation Area';
-      featureLayer.bindTooltip(label, { sticky: true, className: 'conservation-tooltip' });
+      featureLayer.bindTooltip(nameVal || fallback || 'Conservation Area',
+        { sticky: true, className: 'conservation-tooltip' });
     },
   });
   layer.addTo(map);
   state.conservation.layer = layer;
 }
 
-// Generic: build a visible layer for 'ownership' or 'taxdefault' by looking up
-// their APNs in the county shapefile. Returns true if successful.
+// Generic: build a visible layer for 'ownership' or 'taxdefault' from county geometry.
 function buildLayerFromCounty(layerType) {
   const ls = state[layerType];
   if (ls.layer) { map.removeLayer(ls.layer); ls.layer = null; }
-
   if (!state.county.geojson || !state.county.idField || !ls.geojson || !ls.idField) return false;
 
   const targetIds = new Set(
@@ -478,26 +591,22 @@ function buildLayerFromCounty(layerType) {
   );
   if (!targetIds.size) return false;
 
-  // Build county lookup map once
-  const countyFeatures = state.county.geojson.features || [];
-  const matched = countyFeatures.filter(f => {
+  const matched = (state.county.geojson.features || []).filter(f => {
     const id = normalizeId((f.properties || {})[state.county.idField]);
     return id && targetIds.has(id);
   });
   if (!matched.length) return false;
 
   const style = layerType === 'ownership' ? STYLE_OWNERSHIP : STYLE_TAXDEFAULT;
-  const layer = L.geoJSON(
-    { type: 'FeatureCollection', features: matched },
-    {
-      style: () => ({ ...style }),
-      pointToLayer: (feature, latlng) =>
-        L.circleMarker(latlng, { radius: 5, ...style }),
-      onEachFeature: (feature, featureLayer) => {
-        featureLayer.on('click', () => showParcelModal(feature, layerType));
-      },
-    }
-  );
+  const layer = L.geoJSON(_displayFC(matched), {
+    renderer: canvasRenderer,
+    style: () => ({ ...style }),
+    pointToLayer: (feature, latlng) =>
+      L.circleMarker(latlng, { radius: 5, renderer: canvasRenderer, ...style }),
+    onEachFeature: (feature, featureLayer) => {
+      featureLayer.on('click', () => showParcelModal(feature, layerType));
+    },
+  });
   layer.addTo(map);
   ls.layer = layer;
   return true;
@@ -509,14 +618,13 @@ function addOwnershipLayer(geojson) {
     state.ownership.layer = null;
   }
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
-  if (validFeatures.length === 0) {
-    buildLayerFromCounty('ownership');
-    return;
-  }
-  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+  if (!validFeatures.length) { buildLayerFromCounty('ownership'); return; }
+
+  const layer = L.geoJSON(_displayFC(validFeatures), {
+    renderer: canvasRenderer,
     style: () => ({ ...STYLE_OWNERSHIP }),
     pointToLayer: (feature, latlng) =>
-      L.circleMarker(latlng, { radius: 5, ...STYLE_OWNERSHIP }),
+      L.circleMarker(latlng, { radius: 5, renderer: canvasRenderer, ...STYLE_OWNERSHIP }),
     onEachFeature: (feature, featureLayer) => {
       featureLayer.on('click', () => showParcelModal(feature, 'ownership'));
     },
@@ -531,17 +639,15 @@ function addTaxDefaultLayer(geojson) {
     state.taxdefault.layer = null;
   }
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
-  if (validFeatures.length === 0) {
-    // Try county first, then ownership as fallback
-    if (!buildLayerFromCounty('taxdefault')) {
-      buildTaxDefaultPreviewFromOwnership();
-    }
+  if (!validFeatures.length) {
+    if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
     return;
   }
-  const layer = L.geoJSON({ ...geojson, features: validFeatures }, {
+  const layer = L.geoJSON(_displayFC(validFeatures), {
+    renderer: canvasRenderer,
     style: () => ({ ...STYLE_TAXDEFAULT }),
     pointToLayer: (feature, latlng) =>
-      L.circleMarker(latlng, { radius: 5, ...STYLE_TAXDEFAULT }),
+      L.circleMarker(latlng, { radius: 5, renderer: canvasRenderer, ...STYLE_TAXDEFAULT }),
     onEachFeature: (feature, featureLayer) => {
       featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
     },
@@ -552,10 +658,7 @@ function addTaxDefaultLayer(geojson) {
 
 // Fallback: build tax default preview from ownership geometry when no county loaded.
 function buildTaxDefaultPreviewFromOwnership() {
-  if (state.taxdefault.layer) {
-    map.removeLayer(state.taxdefault.layer);
-    state.taxdefault.layer = null;
-  }
+  if (state.taxdefault.layer) { map.removeLayer(state.taxdefault.layer); state.taxdefault.layer = null; }
   const owGJ = state.ownership.geojson;
   const tdGJ = state.taxdefault.geojson;
   if (!owGJ || !tdGJ || !state.ownership.idField || !state.taxdefault.idField) return;
@@ -573,17 +676,15 @@ function buildTaxDefaultPreviewFromOwnership() {
   });
   if (!matched.length) return;
 
-  const layer = L.geoJSON(
-    { type: 'FeatureCollection', features: matched },
-    {
-      style: () => ({ ...STYLE_TAXDEFAULT }),
-      pointToLayer: (feature, latlng) =>
-        L.circleMarker(latlng, { radius: 5, ...STYLE_TAXDEFAULT }),
-      onEachFeature: (feature, featureLayer) => {
-        featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
-      },
-    }
-  );
+  const layer = L.geoJSON(_displayFC(matched), {
+    renderer: canvasRenderer,
+    style: () => ({ ...STYLE_TAXDEFAULT }),
+    pointToLayer: (feature, latlng) =>
+      L.circleMarker(latlng, { radius: 5, renderer: canvasRenderer, ...STYLE_TAXDEFAULT }),
+    onEachFeature: (feature, featureLayer) => {
+      featureLayer.on('click', () => showParcelModal(feature, 'taxdefault'));
+    },
+  });
   layer.addTo(map);
   state.taxdefault.layer = layer;
 }
@@ -599,11 +700,12 @@ function addMatchedLayer(matchedFeatures) {
   if (!validFeatures.length) return;
 
   const layer = L.geoJSON(
-    { type: 'FeatureCollection', features: validFeatures },
+    _displayFC(validFeatures),
     {
+      renderer: canvasRenderer,
       style: () => ({ ...STYLE_MATCHED }),
       pointToLayer: (feature, latlng) =>
-        L.circleMarker(latlng, { radius: 8, ...STYLE_MATCHED }),
+        L.circleMarker(latlng, { radius: 8, renderer: canvasRenderer, ...STYLE_MATCHED }),
       onEachFeature: (feature, featureLayer) => {
         const props  = feature.properties || {};
         const idField = state.taxdefault.idField || state.ownership.idField;
