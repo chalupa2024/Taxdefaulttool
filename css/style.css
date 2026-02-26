@@ -141,6 +141,19 @@ html, body {
   line-height: 1.5;
 }
 
+.cloud-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+}
+
 /* ---- Step badge ---- */
 .step-badge {
   width: 18px;

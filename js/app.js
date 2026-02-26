@@ -61,26 +61,26 @@ let basemapLayer = null;
 
 const COUNTY_CATALOG = {
   california: [
-    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip' },
-    { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '' },
-    { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '' },
-    { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '' },
-    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '' },
-    { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '' },
-    { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '' },
-    { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '' },
-    { id: 'santa-clara',     name: 'Santa Clara',     apnField: 'APN', url: '' },
-    { id: 'alameda',         name: 'Alameda',         apnField: 'APN', url: '' },
-    { id: 'contra-costa',    name: 'Contra Costa',    apnField: 'APN', url: '' },
-    { id: 'ventura',         name: 'Ventura',         apnField: 'APN', url: '' },
-    { id: 'santa-barbara',   name: 'Santa Barbara',   apnField: 'APN', url: '' },
-    { id: 'san-luis-obispo', name: 'San Luis Obispo', apnField: 'APN', url: '' },
-    { id: 'monterey',        name: 'Monterey',        apnField: 'APN', url: '' },
-    { id: 'san-francisco',   name: 'San Francisco',   apnField: 'APN', url: '' },
-    { id: 'stanislaus',      name: 'Stanislaus',      apnField: 'APN', url: '' },
-    { id: 'san-joaquin',     name: 'San Joaquin',     apnField: 'APN', url: '' },
-    { id: 'shasta',          name: 'Shasta',          apnField: 'APN', url: '' },
+    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: '' },
+    { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', taxDefaultUrl: '' },
+    { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'santa-clara',     name: 'Santa Clara',     apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'alameda',         name: 'Alameda',         apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'contra-costa',    name: 'Contra Costa',    apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'ventura',         name: 'Ventura',         apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'santa-barbara',   name: 'Santa Barbara',   apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'san-luis-obispo', name: 'San Luis Obispo', apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'monterey',        name: 'Monterey',        apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'san-francisco',   name: 'San Francisco',   apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'stanislaus',      name: 'Stanislaus',      apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'san-joaquin',     name: 'San Joaquin',     apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'shasta',          name: 'Shasta',          apnField: 'APN', url: '', taxDefaultUrl: '' },
   ],
 };
 
@@ -778,6 +778,11 @@ async function loadCountyFromURL(county) {
     // Re-render grid with active county highlighted
     renderCountyGrid(county.id);
 
+    // Auto-load the county's hosted tax default list if one is configured
+    if (county.taxDefaultUrl) {
+      await loadTaxDefaultFromURL(county.taxDefaultUrl);
+    }
+
   } catch (err) {
     alert('Error loading ' + county.name + ' County parcels: ' + err.message);
     console.error(err);
@@ -1230,6 +1235,141 @@ function showNoGeomNotice(layerType, hasGeom) {
 
 // ─── Layer Load Handler ───────────────────────────────────────────────────────
 
+// ─── Cloud Tax Default Loading ────────────────────────────────────────────────
+
+// Parse a CSV string (same column detection as parseCSV) → GeoJSON
+function csvTextToGeoJSON(text) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      complete: results => {
+        if (!results.data || results.data.length === 0) {
+          reject(new Error('CSV is empty or could not be parsed.')); return;
+        }
+        const fields  = results.meta.fields || [];
+        const latField = fields.find(f => /^lat(itude)?$/i.test(f));
+        const lngField = fields.find(f => /^lon(g(itude)?)?$|^lng$/i.test(f));
+        const wktField = fields.find(f => /wkt|geometry|geom/i.test(f));
+        let features;
+        if (latField && lngField) {
+          features = results.data.filter(r => r[latField] && r[lngField]).map(r => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [parseFloat(r[lngField]), parseFloat(r[latField])] },
+            properties: r,
+          }));
+        } else if (wktField) {
+          features = results.data.filter(r => r[wktField]).map(r => ({
+            type: 'Feature', geometry: parseWKT(r[wktField]), properties: r,
+          })).filter(f => f.geometry !== null);
+        } else {
+          features = results.data.map(r => ({ type: 'Feature', geometry: null, properties: r }));
+        }
+        resolve({ type: 'FeatureCollection', features });
+      },
+      error: err => reject(new Error('CSV parse error: ' + err.message)),
+    });
+  });
+}
+
+// Parse an Excel ArrayBuffer → GeoJSON
+function excelBufferToGeoJSON(buffer) {
+  let workbook;
+  try { workbook = XLSX.read(buffer, { type: 'array' }); }
+  catch (err) { throw new Error('Failed to read Excel file: ' + err.message); }
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('Excel file contains no sheets.');
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+  if (!rows.length) throw new Error('Excel sheet is empty.');
+  const fields  = Object.keys(rows[0]);
+  const latField = fields.find(f => /^lat(itude)?$/i.test(f));
+  const lngField = fields.find(f => /^lon(g(itude)?)?$|^lng$/i.test(f));
+  const wktField = fields.find(f => /wkt|geometry|geom/i.test(f));
+  let features;
+  if (latField && lngField) {
+    features = rows.filter(r => r[latField] !== '' && r[lngField] !== '').map(r => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [parseFloat(r[lngField]), parseFloat(r[latField])] },
+      properties: r,
+    }));
+  } else if (wktField) {
+    features = rows.filter(r => r[wktField]).map(r => ({
+      type: 'Feature', geometry: parseWKT(String(r[wktField])), properties: r,
+    })).filter(f => f.geometry !== null);
+  } else {
+    features = rows.map(r => ({ type: 'Feature', geometry: null, properties: r }));
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+// Fetch + parse any supported format from a URL (CSV, XLSX, GeoJSON, or ZIP shapefile)
+async function parseFromURL(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('HTTP ' + response.status + ' fetching ' + url);
+  const ext = url.toLowerCase().split('?')[0].replace(/.*\./, '');
+  if (ext === 'csv') {
+    return csvTextToGeoJSON(await response.text());
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    return excelBufferToGeoJSON(await response.arrayBuffer());
+  } else if (ext === 'geojson' || ext === 'json') {
+    const gj = await response.json();
+    return gj.type === 'Feature' ? { type: 'FeatureCollection', features: [gj] } : gj;
+  } else if (ext === 'zip') {
+    const gj = await shp(await response.arrayBuffer());
+    return Array.isArray(gj)
+      ? { type: 'FeatureCollection', features: gj.flatMap(fc => fc.features || []) }
+      : gj;
+  }
+  throw new Error('Unsupported format: .' + ext + '. Use .csv, .xlsx, .geojson, or .zip.');
+}
+
+// Auto-load a county's tax default list from a hosted URL, then surface it in the UI.
+async function loadTaxDefaultFromURL(url) {
+  showLoading('Loading tax default list from cloud\u2026');
+  try {
+    const geojson = await parseFromURL(url);
+    applyTaxDefaultData(geojson);
+    // Mark the drop zone as cloud-synced so CSS can show the badge
+    document.getElementById('drop-taxdefault').setAttribute('data-cloud-loaded', 'true');
+    document.getElementById('taxdefault-cloud-notice').style.display = 'flex';
+    checkRunMatchEnabled();
+  } catch (err) {
+    // Non-fatal — user can still upload manually
+    console.warn('Auto-load tax default failed:', err.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Shared helper — apply a parsed tax-default GeoJSON to state and the map.
+// Called by both the manual file upload path and the auto-load-from-URL path.
+function applyTaxDefaultData(geojson) {
+  const fields  = getFields(geojson);
+  const count   = (geojson.features || []).length;
+  const hasGeom = (geojson.features || []).some(f => f.geometry);
+
+  state.taxdefault.geojson     = geojson;
+  state.taxdefault.fields      = fields;
+  state.taxdefault.idField     = guessIdField(fields);
+  state.taxdefault.amountField = guessAmountField(fields);
+  state.taxdefault.ownerField  = guessOwnerField(fields);
+
+  populateFieldSelect('taxdefault-id-field', fields, state.taxdefault.idField);
+  populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
+  populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
+
+  document.getElementById('taxdefault-field-map').style.display = 'block';
+  document.getElementById('drop-taxdefault').classList.add('loaded');
+  showNoGeomNotice('taxdefault', hasGeom);
+
+  addTaxDefaultLayer(geojson);
+  updateBadge('taxdefault', count);
+
+  if (state.taxdefault.layer) {
+    try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+  }
+}
+
 async function handleLayerLoad(file, layerType) {
   const labels = { county: 'County Shapefile', ownership: 'Ownership', taxdefault: 'Tax Default' };
   showLoading(`Loading ${labels[layerType] || layerType}...`);
@@ -1312,26 +1452,7 @@ async function handleLayerLoad(file, layerType) {
       }
 
     } else { // taxdefault
-      state.taxdefault.geojson     = geojson;
-      state.taxdefault.fields      = fields;
-      state.taxdefault.idField     = guessIdField(fields);
-      state.taxdefault.amountField = guessAmountField(fields);
-      state.taxdefault.ownerField  = guessOwnerField(fields);
-
-      populateFieldSelect('taxdefault-id-field', fields, state.taxdefault.idField);
-      populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
-      populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
-
-      document.getElementById('taxdefault-field-map').style.display = 'block';
-      document.getElementById('drop-taxdefault').classList.add('loaded');
-      showNoGeomNotice('taxdefault', hasGeom);
-
-      addTaxDefaultLayer(geojson);
-      updateBadge('taxdefault', count);
-
-      if (state.taxdefault.layer) {
-        try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
-      }
+      applyTaxDefaultData(geojson);
     }
 
     checkRunMatchEnabled();
