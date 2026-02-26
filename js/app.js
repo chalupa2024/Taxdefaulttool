@@ -55,6 +55,35 @@ const BASEMAPS = [
 
 let basemapLayer = null;
 
+// ─── County Catalog ───────────────────────────────────────────────────────────
+// To enable a county: set its `url` to the hosted shapefile ZIP.
+// Swap `url` for a signed/auth endpoint to gate counties by subscription.
+
+const COUNTY_CATALOG = {
+  california: [
+    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: '' },
+    { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '' },
+    { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '' },
+    { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '' },
+    { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '' },
+    { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '' },
+    { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '' },
+    { id: 'santa-clara',     name: 'Santa Clara',     apnField: 'APN', url: '' },
+    { id: 'alameda',         name: 'Alameda',         apnField: 'APN', url: '' },
+    { id: 'contra-costa',    name: 'Contra Costa',    apnField: 'APN', url: '' },
+    { id: 'ventura',         name: 'Ventura',         apnField: 'APN', url: '' },
+    { id: 'santa-barbara',   name: 'Santa Barbara',   apnField: 'APN', url: '' },
+    { id: 'san-luis-obispo', name: 'San Luis Obispo', apnField: 'APN', url: '' },
+    { id: 'monterey',        name: 'Monterey',        apnField: 'APN', url: '' },
+    { id: 'san-francisco',   name: 'San Francisco',   apnField: 'APN', url: '' },
+    { id: 'stanislaus',      name: 'Stanislaus',      apnField: 'APN', url: '' },
+    { id: 'san-joaquin',     name: 'San Joaquin',     apnField: 'APN', url: '' },
+    { id: 'shasta',          name: 'Shasta',          apnField: 'APN', url: '' },
+  ],
+};
+
 // ─── Map Initialization ───────────────────────────────────────────────────────
 
 const map = L.map('map', {
@@ -643,6 +672,111 @@ function addMatchedLayer(matchedFeatures) {
   state.matchedLayer = layer;
 }
 
+// ─── County Grid ──────────────────────────────────────────────────────────────
+
+function renderCountyGrid(activeId = null) {
+  const stateVal = document.getElementById('county-state-select').value;
+  const grid     = document.getElementById('county-grid');
+  const counties = COUNTY_CATALOG[stateVal] || [];
+
+  grid.innerHTML = '';
+
+  if (!counties.length) {
+    grid.innerHTML = '<span style="font-size:11px;color:var(--color-text-muted)">No counties available for this state.</span>';
+    return;
+  }
+
+  counties.forEach(county => {
+    const btn = document.createElement('button');
+    btn.className        = 'county-btn';
+    btn.textContent      = county.name;
+    btn.dataset.countyId = county.id;
+    btn.type             = 'button';
+
+    if (county.id === activeId) btn.classList.add('active');
+
+    if (!county.url) {
+      btn.disabled = true;
+      btn.title    = 'Coming soon — upload your own file below';
+    } else {
+      btn.addEventListener('click', () => loadCountyFromURL(county));
+    }
+
+    grid.appendChild(btn);
+  });
+}
+
+async function loadCountyFromURL(county) {
+  const grid    = document.getElementById('county-grid');
+  const allBtns = Array.from(grid.querySelectorAll('.county-btn'));
+
+  // Disable all buttons while loading
+  allBtns.forEach(b => { b.disabled = true; });
+  const activeBtnEl = grid.querySelector(`[data-county-id="${county.id}"]`);
+  if (activeBtnEl) {
+    activeBtnEl.textContent = county.name + ' \u2026';
+    activeBtnEl.classList.add('county-btn-loading');
+  }
+
+  showLoading('Loading ' + county.name + ' County parcels\u2026');
+
+  try {
+    const response = await fetch(county.url);
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' — check that the shapefile URL is accessible.');
+    const buffer = await response.arrayBuffer();
+
+    let gj = await shp(buffer);
+    if (Array.isArray(gj)) {
+      const features = gj.flatMap(fc => fc.features || []);
+      gj = { type: 'FeatureCollection', features };
+    }
+
+    const fields = getFields(gj);
+    const count  = (gj.features || []).length;
+
+    state.county.geojson = gj;
+    state.county.fields  = fields;
+    state.county.idField = county.apnField && fields.includes(county.apnField)
+      ? county.apnField
+      : guessIdField(fields);
+
+    populateFieldSelect('county-id-field', fields, state.county.idField);
+    document.getElementById('county-field-map').style.display = 'block';
+    document.getElementById('county-controls').style.display  = 'flex';
+    document.getElementById('drop-county').classList.add('loaded');
+
+    addCountyLayer(gj);
+    updateBadge('county', count);
+
+    if (state.county.layer) {
+      try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
+    }
+
+    // Rebuild dependent attribute-only layers
+    const owHasGeom = state.ownership.geojson &&
+      (state.ownership.geojson.features || []).some(f => f.geometry);
+    if (state.ownership.geojson && !owHasGeom) buildLayerFromCounty('ownership');
+
+    const tdHasGeom = state.taxdefault.geojson &&
+      (state.taxdefault.geojson.features || []).some(f => f.geometry);
+    if (state.taxdefault.geojson && !tdHasGeom) {
+      if (!buildLayerFromCounty('taxdefault')) buildTaxDefaultPreviewFromOwnership();
+    }
+
+    checkRunMatchEnabled();
+
+    // Re-render grid with active county highlighted
+    renderCountyGrid(county.id);
+
+  } catch (err) {
+    alert('Error loading ' + county.name + ' County: ' + err.message);
+    console.error(err);
+    renderCountyGrid(); // reset buttons
+  } finally {
+    hideLoading();
+  }
+}
+
 // ─── Match Logic ─────────────────────────────────────────────────────────────
 
 function runMatchAnalysis() {
@@ -1225,6 +1359,11 @@ async function handleLayerLoad(file, layerType) {
   });
 });
 
+// County state selector — re-render county grid
+document.getElementById('county-state-select').addEventListener('change', () => {
+  renderCountyGrid();
+});
+
 // Field selectors — update state and rebuild visual layers
 document.getElementById('county-id-field').addEventListener('change', e => {
   state.county.idField = e.target.value;
@@ -1368,6 +1507,8 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
   document.getElementById('btn-run-match').disabled = true;
   document.getElementById('match-status').textContent = '';
   document.getElementById('match-status').className = 'match-status';
+
+  renderCountyGrid(); // clear active county highlight
 });
 
 // Modal close
@@ -1386,3 +1527,6 @@ document.addEventListener('keydown', e => {
     document.getElementById('modal-overlay').style.display = 'none';
   }
 });
+
+// ─── Initialization ───────────────────────────────────────────────────────────
+renderCountyGrid();

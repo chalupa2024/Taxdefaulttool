@@ -883,6 +883,101 @@ html, body {
 
 .leaflet-control-attribution a { color: var(--color-primary) !important; }
 
+/* ---- County Selector ---- */
+.county-selector {
+  margin-bottom: 12px;
+}
+
+.county-state-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.county-state-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.county-state-select {
+  flex: 1;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.county-state-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.county-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.county-btn {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  padding: 4px 11px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.county-btn:not(:disabled):not(.county-btn-loading):hover {
+  background: rgba(79, 126, 248, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.county-btn.active {
+  background: rgba(79, 126, 248, 0.15);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.county-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.county-btn-loading {
+  opacity: 0.65;
+  cursor: wait !important;
+}
+
+/* ---- Upload Divider ---- */
+.upload-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.upload-divider::before,
+.upload-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 800px) {
   .sidebar {

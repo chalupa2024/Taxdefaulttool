@@ -51,15 +51,33 @@
     <!-- Left Sidebar -->
     <aside class="sidebar">
 
-      <!-- Step 1: County Shapefile -->
+      <!-- Step 1: County Parcel Data -->
       <section class="panel" id="panel-county">
         <div class="panel-header">
           <div class="step-badge">1</div>
           <div class="layer-dot dot-county"></div>
-          <h2>County Parcel Shapefile</h2>
+          <h2>County Parcel Data</h2>
           <span class="badge" id="badge-county">Not loaded</span>
         </div>
-        <p class="panel-desc">Upload the full county parcel shapefile. This provides geometry for all parcels and is used as the geometry source for spreadsheet uploads.</p>
+        <p class="panel-desc">Select a county to load its parcel data, or upload your own shapefile.</p>
+
+        <!-- Pre-loaded county selector -->
+        <div class="county-selector">
+          <div class="county-state-row">
+            <label class="county-state-label">State</label>
+            <select id="county-state-select" class="county-state-select">
+              <option value="california">California</option>
+            </select>
+          </div>
+          <div class="county-grid" id="county-grid">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="upload-divider"><span>or upload your own file</span></div>
+
+        <!-- File upload (manual override) -->
         <div class="upload-zone" id="drop-county" data-layer="county">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span>Drop file here or <label class="link-label" for="file-county">browse</label></span>
