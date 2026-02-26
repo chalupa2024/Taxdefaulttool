@@ -722,13 +722,21 @@ async function loadCountyFromURL(county) {
 
   try {
     const response = await fetch(county.url);
-    if (!response.ok) throw new Error('HTTP ' + response.status + ' — check that the shapefile URL is accessible.');
-    const buffer = await response.arrayBuffer();
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' — check that the file URL is accessible.');
 
-    let gj = await shp(buffer);
-    if (Array.isArray(gj)) {
-      const features = gj.flatMap(fc => fc.features || []);
-      gj = { type: 'FeatureCollection', features };
+    const isGeoJSON = /\.(geojson|json)(\?.*)?$/i.test(county.url);
+    let gj;
+    if (isGeoJSON) {
+      gj = await response.json();
+      if (gj.type === 'Feature') gj = { type: 'FeatureCollection', features: [gj] };
+      if (!gj.type || gj.type !== 'FeatureCollection') throw new Error('URL did not return a valid GeoJSON FeatureCollection.');
+    } else {
+      const buffer = await response.arrayBuffer();
+      gj = await shp(buffer);
+      if (Array.isArray(gj)) {
+        const features = gj.flatMap(fc => fc.features || []);
+        gj = { type: 'FeatureCollection', features };
+      }
     }
 
     const fields = getFields(gj);
@@ -769,7 +777,7 @@ async function loadCountyFromURL(county) {
     renderCountyGrid(county.id);
 
   } catch (err) {
-    alert('Error loading ' + county.name + ' County: ' + err.message);
+    alert('Error loading ' + county.name + ' County parcels: ' + err.message);
     console.error(err);
     renderCountyGrid(); // reset buttons
   } finally {
