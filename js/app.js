@@ -66,7 +66,7 @@ const COUNTY_CATALOG = {
     { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', taxDefaultUrl: '' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/kx-kern-county-california-parcels-land-SHP.zip', taxDefaultUrl: '' },
     { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '', taxDefaultUrl: '' },
