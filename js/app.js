@@ -511,10 +511,25 @@ function buildLayerFromCounty(layerType) {
 
   // Build county lookup map once
   const countyFeatures = state.county.geojson.features || [];
-  const matched = countyFeatures.filter(f => {
-    const id = normalizeId((f.properties || {})[state.county.idField]);
-    return id && targetIds.has(id);
+
+  // Build a lookup from normalized APN → spreadsheet properties
+  const spreadsheetById = new Map();
+  (ls.geojson.features || []).forEach(f => {
+    const id = normalizeId((f.properties || {})[ls.idField]);
+    if (id) spreadsheetById.set(id, f.properties || {});
   });
+
+  // Merge county geometry with spreadsheet properties
+  const matched = countyFeatures
+    .filter(f => {
+      const id = normalizeId((f.properties || {})[state.county.idField]);
+      return id && targetIds.has(id);
+    })
+    .map(f => {
+      const id = normalizeId((f.properties || {})[state.county.idField]);
+      const extra = spreadsheetById.get(id) || {};
+      return { ...f, properties: { ...extra, ...(f.properties || {}) } };
+    });
   if (!matched.length) return false;
 
   const style = layerType === 'ownership' ? STYLE_OWNERSHIP : STYLE_TAXDEFAULT;
@@ -598,10 +613,23 @@ function buildTaxDefaultPreviewFromOwnership() {
   );
   if (!tdIds.size) return;
 
-  const matched = (owGJ.features || []).filter(f => {
-    const id = normalizeId((f.properties || {})[state.ownership.idField]);
-    return id && tdIds.has(id);
+  // Build lookup from normalized APN → tax default spreadsheet properties
+  const tdById = new Map();
+  (tdGJ.features || []).forEach(f => {
+    const id = normalizeId((f.properties || {})[state.taxdefault.idField]);
+    if (id) tdById.set(id, f.properties || {});
   });
+
+  const matched = (owGJ.features || [])
+    .filter(f => {
+      const id = normalizeId((f.properties || {})[state.ownership.idField]);
+      return id && tdIds.has(id);
+    })
+    .map(f => {
+      const id = normalizeId((f.properties || {})[state.ownership.idField]);
+      const extra = tdById.get(id) || {};
+      return { ...f, properties: { ...extra, ...(f.properties || {}) } };
+    });
   if (!matched.length) return;
 
   const layer = L.geoJSON(
