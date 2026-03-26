@@ -63,7 +63,7 @@ const COUNTY_CATALOG = {
   california: [
     { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
     { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', urls: ['https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_001_2229.parcels.wgs84.geojson','https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_002_2229.parcels.wgs84.geojson','https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_003_2229.parcels.wgs84.geojson'], url: '', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'kern',            name: 'Kern',            apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/kx-kern-county-california-parcels-land-SHP.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
