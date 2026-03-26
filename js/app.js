@@ -172,6 +172,7 @@ function startLoadingCycle(countyName) {
     'Loading ' + countyName + ' County parcels\u2026',
     'Identifying new investment opportunities\u2026',
     'Scanning tax default records\u2026',
+    'Analyzing backlotting potential\u2026',
     'Mapping distressed properties\u2026',
     'Calculating parcel values\u2026',
     'Almost there\u2026',
