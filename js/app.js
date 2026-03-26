@@ -157,6 +157,37 @@ function showLoading(msg = 'Processing...') {
 
 function hideLoading() {
   document.getElementById('loading-overlay').style.display = 'none';
+  stopLoadingCycle();
+}
+
+let _loadingCycleTimer = null;
+
+function stopLoadingCycle() {
+  if (_loadingCycleTimer) { clearTimeout(_loadingCycleTimer); _loadingCycleTimer = null; }
+}
+
+function startLoadingCycle(countyName) {
+  stopLoadingCycle();
+  const msgs = [
+    'Loading ' + countyName + ' County parcels\u2026',
+    'Identifying new investment opportunities\u2026',
+    'Scanning tax default records\u2026',
+    'Mapping distressed properties\u2026',
+    'Calculating parcel values\u2026',
+    'Almost there\u2026',
+  ];
+  let i = 0;
+  const el = document.getElementById('loading-msg');
+  function next() {
+    if (!el) return;
+    el.textContent = msgs[i % msgs.length];
+    i++;
+    if (i < msgs.length) {
+      _loadingCycleTimer = setTimeout(next, 2200);
+    }
+  }
+  next();
+  document.getElementById('loading-overlay').style.display = 'flex';
 }
 
 // ─── Utility: Normalize APN strings ──────────────────────────────────────────
@@ -748,7 +779,7 @@ async function loadCountyFromURL(county) {
     activeBtnEl.classList.add('county-btn-loading');
   }
 
-  showLoading('Loading ' + county.name + ' County parcels\u2026');
+  startLoadingCycle(county.name);
 
   try {
     const response = await fetch(county.url);
