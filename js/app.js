@@ -63,7 +63,7 @@ const COUNTY_CATALOG = {
   california: [
     { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
     { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', taxDefaultUrl: '' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', urls: ['https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_001_2229.parcels.wgs84.geojson','https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_002_2229.parcels.wgs84.geojson','https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/LACounty_Parcels_chunk_003_2229.parcels.wgs84.geojson'], url: '', taxDefaultUrl: '' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'kern',            name: 'Kern',            apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/kx-kern-county-california-parcels-land-SHP.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
@@ -757,7 +757,7 @@ function renderCountyGrid(activeId = null) {
 
     if (county.id === activeId) btn.classList.add('active');
 
-    if (!county.url) {
+    if (!county.url && !(county.urls && county.urls.length)) {
       btn.disabled = true;
       btn.title    = 'Coming soon — upload your own file below';
     } else {
@@ -783,23 +783,27 @@ async function loadCountyFromURL(county) {
   startLoadingCycle(county.name);
 
   try {
-    const response = await fetch(county.url);
-    if (!response.ok) throw new Error('HTTP ' + response.status + ' — check that the file URL is accessible.');
+    const urlList = county.urls && county.urls.length ? county.urls : [county.url];
 
-    const isGeoJSON = /\.(geojson|json)(\?.*)?$/i.test(county.url);
-    let gj;
-    if (isGeoJSON) {
-      gj = await response.json();
-      if (gj.type === 'Feature') gj = { type: 'FeatureCollection', features: [gj] };
-      if (!gj.type || gj.type !== 'FeatureCollection') throw new Error('URL did not return a valid GeoJSON FeatureCollection.');
-    } else {
-      const buffer = await response.arrayBuffer();
-      gj = await shp(buffer);
-      if (Array.isArray(gj)) {
-        const features = gj.flatMap(fc => fc.features || []);
-        gj = { type: 'FeatureCollection', features };
+    async function fetchOneChunk(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('HTTP ' + response.status + ' — check that the file URL is accessible.');
+      const isGeoJSON = /\.(geojson|json)(\?.*)?$/i.test(url);
+      if (isGeoJSON) {
+        const chunk = await response.json();
+        if (chunk.type === 'Feature') return [chunk];
+        return chunk.features || [];
+      } else {
+        const buffer = await response.arrayBuffer();
+        const chunk = await shp(buffer);
+        if (Array.isArray(chunk)) return chunk.flatMap(fc => fc.features || []);
+        return chunk.features || [];
       }
     }
+
+    const chunks = await Promise.all(urlList.map(fetchOneChunk));
+    let gj = { type: 'FeatureCollection', features: chunks.flat() };
+    if (!gj.features.length) throw new Error('No features found in county data.');
 
     const fields = getFields(gj);
     const count  = (gj.features || []).length;
