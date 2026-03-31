@@ -72,7 +72,7 @@ const COUNTY_CATALOG = {
     { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/kx-kern-county-california-parcels-land-SHP.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '', mapboxTileset: 'tommytex.kern-county-parcels', mapboxLayer: 'kern_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
     { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '', taxDefaultUrl: '' },
