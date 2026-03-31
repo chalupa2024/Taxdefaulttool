@@ -778,40 +778,32 @@ function renderCountyGrid(activeId = null) {
   });
 }
 
-// Fetch county outline from US Census TIGER, draw as boundary, zoom to fit.
+// Fetch county outline from CA counties GeoJSON, draw as boundary, zoom to fit.
 async function loadCountyBoundary(countyName) {
-  // Remove previous boundary
   if (state.county.boundaryLayer) {
     map.removeLayer(state.county.boundaryLayer);
     state.county.boundaryLayer = null;
   }
 
   try {
-    const name = encodeURIComponent(`'${countyName}'`);
-    const url  = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query` +
-                 `?where=NAME=${name}+AND+STATE=%2706%27&outFields=NAME&geometryPrecision=4&outSR=4326&f=geojson`;
-    const res  = await fetch(url);
+    const url = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json';
+    const res = await fetch(url);
     if (!res.ok) return;
-    const gj = await res.json();
-    if (!gj.features || !gj.features.length) return;
+    const gj  = await res.json();
 
-    const layer = L.geoJSON(gj, {
-      style: {
-        color:       '#ffffff',
-        weight:      2.5,
-        opacity:     0.6,
-        fill:        false,
-        dashArray:   '6 4',
-      },
+    const match = (gj.features || []).find(f =>
+      (f.properties.name || '').toLowerCase() === countyName.toLowerCase()
+    );
+    if (!match) return;
+
+    const layer = L.geoJSON({ type: 'FeatureCollection', features: [match] }, {
+      style: { color: '#ffffff', weight: 2.5, opacity: 0.6, fill: false, dashArray: '6 4' },
       interactive: false,
     });
     layer.addTo(map);
     state.county.boundaryLayer = layer;
-
-    // Zoom map to county boundary
     map.fitBounds(layer.getBounds(), { padding: [24, 24] });
   } catch (e) {
-    // Non-fatal — boundary is cosmetic
     console.warn('County boundary fetch failed:', e.message);
   }
 }
