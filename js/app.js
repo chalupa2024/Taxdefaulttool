@@ -8,10 +8,12 @@
 
 const state = {
   county: {
-    geojson:   null,   // full county parcel fabric — geometry source
-    layer:     null,
-    idField:   null,
-    fields:    [],
+    geojson:       null,   // full county parcel fabric — geometry source
+    layer:         null,
+    boundaryLayer: null,   // Census TIGER county outline
+    idField:       null,
+    fields:        [],
+    isMapbox:      false,
   },
   ownership: {
     geojson:   null,   // user's ownership data (may be attribute-only)
@@ -776,6 +778,44 @@ function renderCountyGrid(activeId = null) {
   });
 }
 
+// Fetch county outline from US Census TIGER, draw as boundary, zoom to fit.
+async function loadCountyBoundary(countyName) {
+  // Remove previous boundary
+  if (state.county.boundaryLayer) {
+    map.removeLayer(state.county.boundaryLayer);
+    state.county.boundaryLayer = null;
+  }
+
+  try {
+    const name = encodeURIComponent(`'${countyName}'`);
+    const url  = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query` +
+                 `?where=NAME=${name}+AND+STATE=%2706%27&outFields=NAME&geometryPrecision=4&outSR=4326&f=geojson`;
+    const res  = await fetch(url);
+    if (!res.ok) return;
+    const gj = await res.json();
+    if (!gj.features || !gj.features.length) return;
+
+    const layer = L.geoJSON(gj, {
+      style: {
+        color:       '#ffffff',
+        weight:      2.5,
+        opacity:     0.6,
+        fill:        false,
+        dashArray:   '6 4',
+      },
+      interactive: false,
+    });
+    layer.addTo(map);
+    state.county.boundaryLayer = layer;
+
+    // Zoom map to county boundary
+    map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+  } catch (e) {
+    // Non-fatal — boundary is cosmetic
+    console.warn('County boundary fetch failed:', e.message);
+  }
+}
+
 async function loadCountyFromURL(county) {
   const grid    = document.getElementById('county-grid');
   const allBtns = Array.from(grid.querySelectorAll('.county-btn'));
@@ -830,9 +870,7 @@ async function loadCountyFromURL(county) {
     addCountyLayer(gj);
     updateBadge('county', count);
 
-    if (state.county.layer) {
-      try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
-    }
+    await loadCountyBoundary(county.name);
 
     // Rebuild dependent attribute-only layers
     const owHasGeom = state.ownership.geojson &&
@@ -909,8 +947,6 @@ function buildMapboxVectorLayer(county) {
   state.county.layer = vectorLayer;
   state.county.idField = idField;
   state.county.isMapbox = true;
-  // Fit to LA County bounds
-  map.fitBounds([[33.7, -118.95], [34.83, -117.64]]);
 }
 
 async function loadCountyFromMapbox(county) {
@@ -924,6 +960,7 @@ async function loadCountyFromMapbox(county) {
 
   try {
     buildMapboxVectorLayer(county);
+    await loadCountyBoundary(county.name);
 
     state.county.fields  = [];
     state.county.geojson = null; // no GeoJSON — tiles are streamed
@@ -1798,6 +1835,9 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
 
   state.taxdefault.amountField = null;
   state.taxdefault.ownerField  = null;
+
+  if (state.county.boundaryLayer) { map.removeLayer(state.county.boundaryLayer); state.county.boundaryLayer = null; }
+  state.county.isMapbox = false;
 
   if (state.matchedLayer) { map.removeLayer(state.matchedLayer); state.matchedLayer = null; }
   state.matched = [];
