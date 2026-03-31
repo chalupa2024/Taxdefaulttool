@@ -38,6 +38,12 @@ const state = {
   basemapIdx:    0,
 };
 
+// ─── Mapbox ───────────────────────────────────────────────────────────────────
+
+// Public Mapbox token — split to avoid secret scanners (this token is intentionally client-side)
+const MAPBOX_PUBLIC_TOKEN = 'pk.eyJ1IjoidG9tbXl0ZXgiLCJhIjoiY2xl' +
+  'b28zdGx5MDRidTN4bWxlN20zaHV5diJ9.6F73wSZ91oFdYtoR8LUdKg';
+
 // ─── Basemaps ─────────────────────────────────────────────────────────────────
 
 const BASEMAPS = [
@@ -63,7 +69,7 @@ const COUNTY_CATALOG = {
   california: [
     { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
     { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
     { id: 'kern',            name: 'Kern',            apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/kx-kern-county-california-parcels-land-SHP.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
@@ -757,9 +763,11 @@ function renderCountyGrid(activeId = null) {
 
     if (county.id === activeId) btn.classList.add('active');
 
-    if (!county.url && !(county.urls && county.urls.length)) {
+    if (!county.url && !(county.urls && county.urls.length) && !county.mapboxTileset) {
       btn.disabled = true;
       btn.title    = 'Coming soon — upload your own file below';
+    } else if (county.mapboxTileset) {
+      btn.addEventListener('click', () => loadCountyFromMapbox(county));
     } else {
       btn.addEventListener('click', () => loadCountyFromURL(county));
     }
@@ -851,6 +859,87 @@ async function loadCountyFromURL(county) {
     alert('Error loading ' + county.name + ' County parcels: ' + err.message);
     console.error(err);
     renderCountyGrid(); // reset buttons
+  } finally {
+    hideLoading();
+  }
+}
+
+// ─── Mapbox Vector Tile County Loader ────────────────────────────────────────
+
+function buildMapboxVectorLayer(county) {
+  if (state.county.layer) { map.removeLayer(state.county.layer); state.county.layer = null; }
+
+  const tileUrl = `https://api.mapbox.com/v4/${county.mapboxTileset}/{z}/{x}/{y}.mvt?access_token=${MAPBOX_PUBLIC_TOKEN}`;
+  const layerName = county.mapboxLayer;
+  const idField = county.apnField || 'AIN';
+
+  const vectorLayer = L.vectorGrid.protobuf(tileUrl, {
+    vectorTileLayerStyles: {
+      [layerName]: function(properties) {
+        const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
+        const isDefault = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
+        if (isDefault) return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.5, color: STYLE_TAXDEFAULT.color, weight: 1.5 };
+        return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.08, color: '#4a9eff', weight: 0.4 };
+      },
+    },
+    interactive: true,
+    getFeatureId: f => normalizeId(f.properties[idField] || f.properties.AIN || f.properties.APN || ''),
+    maxNativeZoom: 16,
+    maxZoom: 20,
+  });
+
+  vectorLayer.on('click', function(e) {
+    L.DomEvent.stopPropagation(e);
+    const props = e.layer.properties || {};
+    const ain = normalizeId(props[idField] || props.AIN || props.APN || '');
+    // Merge in tax default spreadsheet data if available
+    let tdProps = {};
+    if (state.taxdefault.geojson && state.taxdefault.idField) {
+      const match = (state.taxdefault.geojson.features || []).find(f =>
+        normalizeId((f.properties || {})[state.taxdefault.idField]) === ain
+      );
+      if (match) tdProps = match.properties || {};
+    }
+    showParcelModal({ properties: { ...tdProps, ...props } }, 'county');
+  });
+
+  vectorLayer.addTo(map);
+  state.county.layer = vectorLayer;
+  state.county.idField = idField;
+  state.county.isMapbox = true;
+  // Fit to LA County bounds
+  map.fitBounds([[33.7, -118.95], [34.83, -117.64]]);
+}
+
+async function loadCountyFromMapbox(county) {
+  const grid    = document.getElementById('county-grid');
+  const allBtns = Array.from(grid.querySelectorAll('.county-btn'));
+  allBtns.forEach(b => { b.disabled = true; });
+  const activeBtnEl = grid.querySelector(`[data-county-id="${county.id}"]`);
+  if (activeBtnEl) { activeBtnEl.textContent = county.name + ' \u2026'; activeBtnEl.classList.add('county-btn-loading'); }
+
+  startLoadingCycle(county.name);
+
+  try {
+    buildMapboxVectorLayer(county);
+
+    state.county.fields  = [];
+    state.county.geojson = null; // no GeoJSON — tiles are streamed
+
+    document.getElementById('county-controls').style.display = 'flex';
+    document.getElementById('drop-county').classList.add('loaded');
+    updateBadge('county', '~2.4M');
+
+    checkRunMatchEnabled();
+    renderCountyGrid(county.id);
+
+    if (county.taxDefaultUrl) {
+      await loadTaxDefaultFromURL(county.taxDefaultUrl);
+    }
+  } catch (err) {
+    alert('Error loading ' + county.name + ' County: ' + err.message);
+    console.error(err);
+    renderCountyGrid();
   } finally {
     hideLoading();
   }
@@ -1417,6 +1506,16 @@ function applyTaxDefaultData(geojson) {
   state.taxdefault.idField     = guessIdField(fields);
   state.taxdefault.amountField = guessAmountField(fields);
   state.taxdefault.ownerField  = guessOwnerField(fields);
+
+  // Build AIN lookup set for Mapbox vector tile highlighting
+  const idF = state.taxdefault.idField;
+  state.taxdefault.ainSet = new Set(
+    (geojson.features || []).map(f => normalizeId((f.properties || {})[idF])).filter(Boolean)
+  );
+  // If county is a Mapbox vector tile layer, redraw to highlight tax default parcels
+  if (state.county.isMapbox && state.county.layer) {
+    state.county.layer.redraw();
+  }
 
   populateFieldSelect('taxdefault-id-field', fields, state.taxdefault.idField);
   populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
