@@ -855,6 +855,8 @@ async function loadCountyFromURL(county) {
       await loadTaxDefaultFromURL(county.taxDefaultUrl);
     }
 
+    mobileGoToMap();
+
   } catch (err) {
     alert('Error loading ' + county.name + ' County parcels: ' + err.message);
     console.error(err);
@@ -936,6 +938,9 @@ async function loadCountyFromMapbox(county) {
     if (county.taxDefaultUrl) {
       await loadTaxDefaultFromURL(county.taxDefaultUrl);
     }
+
+    mobileGoToMap();
+
   } catch (err) {
     alert('Error loading ' + county.name + ' County: ' + err.message);
     console.error(err);
@@ -1150,6 +1155,8 @@ function renderResultsList(features, filter = '') {
 
   panel.style.display = features.length ? 'flex' : 'none';
   document.getElementById('btn-show-results').style.display = features.length ? 'block' : 'none';
+
+  mobileShowResults(features.length);
 
   countEl.textContent    = features.length;
   toolbarCount.textContent = features.length;
@@ -1821,6 +1828,62 @@ document.addEventListener('keydown', e => {
     document.getElementById('modal-overlay').style.display = 'none';
   }
 });
+
+// ─── Mobile Navigation ────────────────────────────────────────────────────────
+
+function isMobile() { return window.innerWidth <= 640; }
+
+window.setMobileTab = function(tab) {
+  if (!isMobile()) return;
+
+  const sidebar   = document.querySelector('.sidebar');
+  const mapContainer = document.querySelector('.map-container');
+  const resultsPanel = document.getElementById('results-panel');
+  const btns      = document.querySelectorAll('.mobile-nav-btn');
+
+  // Update active button
+  btns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+
+  // Setup tab — show sidebar overlay, hide results
+  if (tab === 'setup') {
+    sidebar.classList.add('mobile-open');
+    if (resultsPanel.style.display !== 'none') resultsPanel.style.display = 'none';
+  }
+
+  // Map tab — hide sidebar, hide results panel
+  if (tab === 'map') {
+    sidebar.classList.remove('mobile-open');
+    resultsPanel.style.display = 'none';
+    // Trigger Leaflet resize since the map container may have changed size
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+
+  // Results tab — hide sidebar, show results panel
+  if (tab === 'results') {
+    sidebar.classList.remove('mobile-open');
+    if (state.matched.length) {
+      resultsPanel.style.display = 'flex';
+    }
+  }
+};
+
+// Auto-switch to Map tab when county loads
+function mobileGoToMap() {
+  if (isMobile()) setMobileTab('map');
+}
+
+// Auto-switch to Results tab and update badge when analysis completes
+function mobileShowResults(count) {
+  if (!isMobile()) return;
+  const badge = document.getElementById('mobile-results-badge');
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+    setMobileTab('results');
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 // ─── Initialization ───────────────────────────────────────────────────────────
 renderCountyGrid();

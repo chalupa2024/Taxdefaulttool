@@ -991,22 +991,183 @@ html, body {
   background: var(--color-border);
 }
 
-/* ---- Responsive ---- */
+/* ---- Responsive — Tablet ---- */
 @media (max-width: 800px) {
-  .sidebar {
-    width: 260px;
-    min-width: 240px;
-  }
-  .results-panel {
-    width: calc(100vw - 280px);
-    min-width: 220px;
-  }
+  .sidebar { width: 260px; min-width: 240px; }
+  .results-panel { width: calc(100vw - 280px); min-width: 220px; }
 }
 
-@media (max-width: 600px) {
-  .app-body { flex-direction: column; }
-  .sidebar { width: 100%; height: 220px; flex-direction: row; overflow-x: auto; overflow-y: hidden; }
-  .panel { min-width: 240px; border-right: 1px solid var(--color-border); border-bottom: none; }
-  .results-panel { width: calc(100% - 24px); }
+/* ---- Mobile bottom nav (hidden on desktop) ---- */
+.mobile-nav { display: none; }
+
+/* ---- Responsive — Mobile ---- */
+@media (max-width: 640px) {
+
+  /* Hide subtitle in header */
   .header-subtitle { display: none; }
+
+  /* Compact header */
+  .app-header { padding: 0 12px; height: 52px; }
+  .app-header h1 { font-size: 15px; }
+  .header-icon { width: 20px; height: 20px; }
+  .btn { font-size: 12px; padding: 6px 10px; }
+
+  /* Full-screen body — map fills everything, sidebar overlays */
+  .app-body {
+    flex-direction: column;
+    height: calc(100vh - 52px - 60px); /* minus header and mobile nav */
+  }
+
+  /* Map always fills the body */
+  .map-container {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+  }
+
+  #map { width: 100%; height: 100%; }
+
+  /* Sidebar becomes a full-screen overlay, hidden by default */
+  .sidebar {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    width: 100%;
+    height: auto;
+    z-index: 1200;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-direction: column;
+    background: var(--color-bg);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: none;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Panel full width on mobile */
+  .panel {
+    min-width: unset;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    padding: 14px;
+  }
+
+  /* County grid 3 columns on mobile */
+  .county-grid { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .county-btn { font-size: 11px; padding: 6px 4px; }
+
+  /* Upload zones compact */
+  .upload-zone { padding: 14px 12px; }
+  .upload-zone svg { width: 22px; height: 22px; }
+  .upload-zone p { font-size: 12px; }
+
+  /* Results panel full screen overlay */
+  .results-panel {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    width: 100% !important;
+    max-width: 100%;
+    height: auto;
+    z-index: 1200;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .results-list { max-height: calc(100vh - 280px); }
+
+  /* Modal full screen */
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal { height: 90vh; border-radius: 16px 16px 0 0; }
+  .modal-body { max-height: calc(90vh - 60px); overflow-y: auto; }
+
+  /* Map toolbar repositioned above mobile nav */
+  .map-toolbar { bottom: 68px; }
+
+  /* Bottom nav visible on mobile */
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    z-index: 1300;
+    align-items: stretch;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 0;
+    position: relative;
+    transition: color 0.15s;
+  }
+
+  .mobile-nav-btn svg { width: 20px; height: 20px; stroke-width: 1.8; }
+
+  .mobile-nav-btn.active {
+    color: var(--color-primary);
+  }
+
+  .mobile-nav-btn.active svg {
+    stroke: var(--color-primary);
+  }
+
+  /* Results badge on nav button */
+  .mobile-results-badge {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 18px);
+    background: var(--color-matched, #a855f7);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    padding: 0 4px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Loading overlay text size */
+  #loading-msg { font-size: 13px; }
+
+  /* Layer controls compact */
+  .layer-controls { flex-wrap: wrap; gap: 4px; }
+  .btn-sm { font-size: 11px; padding: 4px 8px; }
 }
