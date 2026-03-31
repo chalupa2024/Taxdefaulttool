@@ -788,13 +788,16 @@ async function loadCountyBoundary(countyName) {
   try {
     const url = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json';
     const res = await fetch(url);
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const gj  = await res.json();
 
-    const match = (gj.features || []).find(f =>
-      (f.properties.name || '').toLowerCase() === countyName.toLowerCase()
+    // Match flexibly — file may use "Los Angeles" or "Los Angeles County"
+    const normalize = s => s.toLowerCase().replace(/\s+county$/i, '').trim();
+    const target    = normalize(countyName);
+    const match     = (gj.features || []).find(f =>
+      normalize(f.properties.name || '') === target
     );
-    if (!match) return;
+    if (!match) throw new Error('County not found: ' + countyName);
 
     const layer = L.geoJSON({ type: 'FeatureCollection', features: [match] }, {
       style: { color: '#ffffff', weight: 2.5, opacity: 0.6, fill: false, dashArray: '6 4' },
@@ -805,6 +808,10 @@ async function loadCountyBoundary(countyName) {
     map.fitBounds(layer.getBounds(), { padding: [24, 24] });
   } catch (e) {
     console.warn('County boundary fetch failed:', e.message);
+    // Fallback — zoom using parcel layer bounds if available
+    if (state.county.layer && !state.county.isMapbox) {
+      try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (_) {}
+    }
   }
 }
 
