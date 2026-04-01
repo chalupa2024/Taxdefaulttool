@@ -1609,6 +1609,9 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
   populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
   populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
 
+  // Show min bid row only when an amount field is detected
+  document.getElementById('min-bid-row').style.display = state.taxdefault.amountField ? 'flex' : 'none';
+
   document.getElementById('taxdefault-field-map').style.display = 'block';
   document.getElementById('drop-taxdefault').classList.add('loaded');
   showNoGeomNotice('taxdefault', hasGeom);
@@ -1783,6 +1786,11 @@ document.getElementById('taxdefault-id-field').addEventListener('change', e => {
 
 document.getElementById('taxdefault-amount-field').addEventListener('change', e => {
   state.taxdefault.amountField = e.target.value;
+  document.getElementById('min-bid-row').style.display = e.target.value ? 'flex' : 'none';
+  if (!e.target.value) {
+    document.getElementById('min-bid-input').value = '';
+    renderResultsList(state.matched, document.getElementById('results-search').value);
+  }
 });
 
 document.getElementById('taxdefault-owner-field').addEventListener('change', e => {

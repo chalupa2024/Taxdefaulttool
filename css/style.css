@@ -561,19 +561,18 @@ html, body {
   cursor: pointer;
 }
 
-.results-filter-bar {
+.min-bid-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-2);
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.results-filter-bar label {
+.min-bid-label {
   font-size: 11px;
   color: var(--color-text-muted);
   white-space: nowrap;
+  font-weight: normal !important;
 }
 
 .min-bid-wrap {
@@ -591,7 +590,7 @@ html, body {
   font-size: 12px;
   color: var(--color-text-muted);
   border-right: 1px solid var(--color-border);
-  line-height: 28px;
+  line-height: 26px;
 }
 
 #min-bid-input {
@@ -599,7 +598,7 @@ html, body {
   background: transparent;
   border: none;
   color: var(--color-text);
-  padding: 4px 8px;
+  padding: 3px 6px;
   font-size: 12px;
   min-width: 0;
 }
@@ -608,12 +607,16 @@ html, body {
 #min-bid-input::-webkit-inner-spin-button,
 #min-bid-input::-webkit-outer-spin-button { opacity: 0.5; }
 
-#btn-clear-min-bid {
-  padding: 3px 7px;
+.btn-clear-inline {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 6px;
   font-size: 11px;
-  opacity: 0.7;
+  line-height: 26px;
 }
-#btn-clear-min-bid:hover { opacity: 1; }
+.btn-clear-inline:hover { color: var(--color-text); }
 
 .results-list {
   flex: 1;

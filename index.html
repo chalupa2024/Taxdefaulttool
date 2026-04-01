@@ -189,6 +189,14 @@
           <label>Owner field (optional):
             <select id="taxdefault-owner-field"><option value="">— none —</option></select>
           </label>
+          <div class="min-bid-row" id="min-bid-row" style="display:none;">
+            <label class="min-bid-label">Min Bid Filter</label>
+            <div class="min-bid-wrap">
+              <span class="min-bid-prefix">$</span>
+              <input type="number" id="min-bid-input" placeholder="0" min="0" step="1000" />
+              <button id="btn-clear-min-bid" class="btn-clear-inline" title="Clear">✕</button>
+            </div>
+          </div>
         </div>
         <div id="taxdefault-no-geom-notice" class="no-geom-notice" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -250,14 +258,6 @@
             <option value="amount-asc">Amount ↑</option>
             <option value="apn">APN</option>
           </select>
-        </div>
-        <div class="results-filter-bar">
-          <label for="min-bid-input">Min Bid</label>
-          <div class="min-bid-wrap">
-            <span class="min-bid-prefix">$</span>
-            <input type="number" id="min-bid-input" placeholder="0" min="0" step="1000" />
-          </div>
-          <button id="btn-clear-min-bid" class="btn btn-sm" title="Clear filter">✕</button>
         </div>
         <div class="results-list" id="results-list"></div>
         <div class="results-footer">
