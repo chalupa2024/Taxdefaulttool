@@ -792,12 +792,23 @@ async function loadCountyBoundary(county) {
     state.county.boundaryLayer = null;
   }
 
-  // ── Step 1: Zoom immediately using hardcoded bounds (no network needed) ──
+  // ── Step 1: Zoom + draw rectangle outline immediately (guaranteed, no network) ──
   if (hardBounds) {
     map.fitBounds(hardBounds, { padding: [24, 24] });
+
+    const rectLayer = L.rectangle(hardBounds, {
+      color:       '#FFD700',
+      weight:      2,
+      opacity:     0.7,
+      fill:        false,
+      dashArray:   '8 5',
+      interactive: false,
+    });
+    rectLayer.addTo(map);
+    state.county.boundaryLayer = rectLayer;
   }
 
-  // ── Step 2: Draw visual outline from GeoJSON ──
+  // ── Step 2: Try to upgrade to exact polygon outline from GeoJSON ──
   try {
     if (!_caCountiesGeoJSON) {
       // jsDelivr mirrors GitHub repos with reliable CORS; fall back to raw.githubusercontent.com
@@ -832,11 +843,16 @@ async function loadCountyBoundary(county) {
 
     if (!match) throw new Error('County not found in GeoJSON: ' + countyName);
 
-    const layer = L.geoJSON(
+    // Replace the rectangle with the exact polygon
+    if (state.county.boundaryLayer) {
+      map.removeLayer(state.county.boundaryLayer);
+      state.county.boundaryLayer = null;
+    }
+    const polyLayer = L.geoJSON(
       { type: 'FeatureCollection', features: [match] },
       {
         style: {
-          color:     '#FFD700', // bright gold — clearly visible on satellite
+          color:     '#FFD700',
           weight:    3,
           opacity:   1,
           fill:      false,
@@ -845,16 +861,15 @@ async function loadCountyBoundary(county) {
         interactive: false,
       }
     );
-    layer.addTo(map);
-    state.county.boundaryLayer = layer;
+    polyLayer.addTo(map);
+    state.county.boundaryLayer = polyLayer;
 
-    // Re-zoom to the GeoJSON bounds if we didn't have hardcoded bounds
+    // Zoom to exact polygon bounds if no hardcoded bounds
     if (!hardBounds) {
-      map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+      map.fitBounds(polyLayer.getBounds(), { padding: [24, 24] });
     }
   } catch (e) {
-    console.warn('County boundary outline failed:', e.message);
-    // Fallback zoom for non-Mapbox counties if hardcoded bounds also missing
+    console.warn('County polygon outline failed (rectangle shown instead):', e.message);
     if (!hardBounds && state.county.layer && !state.county.isMapbox) {
       try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (_) {}
     }
@@ -938,6 +953,11 @@ async function loadCountyFromURL(county) {
       await loadTaxDefaultFromURL(county.taxDefaultUrl);
     }
 
+    // Final zoom guarantee — runs after all async ops so nothing can override it
+    if (county.bounds) {
+      map.fitBounds(county.bounds, { padding: [24, 24] });
+    }
+
     mobileGoToMap();
 
   } catch (err) {
@@ -1019,6 +1039,11 @@ async function loadCountyFromMapbox(county) {
 
     if (county.taxDefaultUrl) {
       await loadTaxDefaultFromURL(county.taxDefaultUrl);
+    }
+
+    // Final zoom guarantee — runs after all async ops so nothing can override it
+    if (county.bounds) {
+      map.fitBounds(county.bounds, { padding: [24, 24] });
     }
 
     mobileGoToMap();
