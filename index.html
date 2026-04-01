@@ -251,6 +251,14 @@
             <option value="apn">APN</option>
           </select>
         </div>
+        <div class="results-filter-bar">
+          <label for="min-bid-input">Min Bid</label>
+          <div class="min-bid-wrap">
+            <span class="min-bid-prefix">$</span>
+            <input type="number" id="min-bid-input" placeholder="0" min="0" step="1000" />
+          </div>
+          <button id="btn-clear-min-bid" class="btn btn-sm" title="Clear filter">✕</button>
+        </div>
         <div class="results-list" id="results-list"></div>
         <div class="results-footer">
           <button class="btn btn-sm btn-primary" id="btn-export-results">Export CSV</button>

@@ -1224,7 +1224,7 @@ function renderResultsList(features, filter = '') {
 
   mobileShowResults(features.length);
 
-  countEl.textContent    = features.length;
+  countEl.textContent      = features.length;
   toolbarCount.textContent = features.length;
   document.getElementById('btn-export').disabled = features.length === 0;
 
@@ -1248,11 +1248,21 @@ function renderResultsList(features, filter = '') {
     });
   }
 
-  // Filter
+  // Filter by text search
   const filterLower = filter.toLowerCase();
-  const visible = filterLower
+  let visible = filterLower
     ? sorted.filter(f => JSON.stringify(f.properties).toLowerCase().includes(filterLower))
     : sorted;
+
+  // Filter by minimum bid amount
+  const minBidVal = parseFloat(document.getElementById('min-bid-input').value);
+  if (!isNaN(minBidVal) && minBidVal > 0 && state.taxdefault.amountField) {
+    const af = state.taxdefault.amountField;
+    visible = visible.filter(f => {
+      const raw = String((f.properties || {})[af] || '').replace(/[^\d.]/g, '');
+      return parseFloat(raw) >= minBidVal;
+    });
+  }
 
   list.innerHTML = '';
   visible.forEach(feature => {
@@ -1289,16 +1299,20 @@ function renderResultsList(features, filter = '') {
     list.appendChild(item);
   });
 
-  // Total amount
+  // Total amount for visible (filtered) results
   if (state.taxdefault.amountField) {
-    const total = features.reduce((sum, f) => {
+    const total = visible.reduce((sum, f) => {
       const v = parseFloat(String((f.properties || {})[state.taxdefault.amountField]).replace(/[^\d.]/g, ''));
       return sum + (isNaN(v) ? 0 : v);
     }, 0);
-    summary.textContent = `Total: ${formatCurrency(total)}`;
+    const filterNote = visible.length < features.length ? ` (${visible.length} shown)` : '';
+    summary.textContent = `Total: ${formatCurrency(total)}${filterNote}`;
   } else {
-    summary.textContent = `${features.length} parcels`;
+    summary.textContent = `${visible.length} parcels`;
   }
+
+  // Refresh map layer to show only visible (filtered) parcels
+  addMatchedLayer(visible);
 }
 
 function updateMatchStatus(count) {
@@ -1832,6 +1846,15 @@ document.getElementById('results-search').addEventListener('input', e => {
 });
 
 document.getElementById('results-sort').addEventListener('change', () => {
+  renderResultsList(state.matched, document.getElementById('results-search').value);
+});
+
+document.getElementById('min-bid-input').addEventListener('input', () => {
+  renderResultsList(state.matched, document.getElementById('results-search').value);
+});
+
+document.getElementById('btn-clear-min-bid').addEventListener('click', () => {
+  document.getElementById('min-bid-input').value = '';
   renderResultsList(state.matched, document.getElementById('results-search').value);
 });
 

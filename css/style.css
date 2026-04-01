@@ -561,6 +561,60 @@ html, body {
   cursor: pointer;
 }
 
+.results-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.results-filter-bar label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.min-bid-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex: 1;
+}
+
+.min-bid-prefix {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  border-right: 1px solid var(--color-border);
+  line-height: 28px;
+}
+
+#min-bid-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  padding: 4px 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+#min-bid-input:focus { outline: none; }
+#min-bid-input::placeholder { color: var(--color-text-muted); }
+#min-bid-input::-webkit-inner-spin-button,
+#min-bid-input::-webkit-outer-spin-button { opacity: 0.5; }
+
+#btn-clear-min-bid {
+  padding: 3px 7px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+#btn-clear-min-bid:hover { opacity: 1; }
+
 .results-list {
   flex: 1;
   overflow-y: auto;
