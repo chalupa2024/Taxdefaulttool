@@ -69,26 +69,26 @@ let basemapLayer = null;
 
 const COUNTY_CATALOG = {
   california: [
-    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
-    { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
-    { id: 'orange',          name: 'Orange',          apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'kern',            name: 'Kern',            apnField: 'APN', url: '', mapboxTileset: 'tommytex.kern-county-parcels', mapboxLayer: 'kern_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
-    { id: 'fresno',          name: 'Fresno',          apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'tulare',          name: 'Tulare',          apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'santa-clara',     name: 'Santa Clara',     apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'alameda',         name: 'Alameda',         apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'contra-costa',    name: 'Contra Costa',    apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'ventura',         name: 'Ventura',         apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'santa-barbara',   name: 'Santa Barbara',   apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'san-luis-obispo', name: 'San Luis Obispo', apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'monterey',        name: 'Monterey',        apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'san-francisco',   name: 'San Francisco',   apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'stanislaus',      name: 'Stanislaus',      apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'san-joaquin',     name: 'San Joaquin',     apnField: 'APN', url: '', taxDefaultUrl: '' },
-    { id: 'shasta',          name: 'Shasta',          apnField: 'APN', url: '', taxDefaultUrl: '' },
+    { id: 'riverside',       name: 'Riverside',       apnField: 'APN', bounds: [[33.43, -117.67], [34.08, -114.42]], url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
+    { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', bounds: [[34.67, -117.67], [35.81, -114.43]], url: '', taxDefaultUrl: '' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', bounds: [[33.70, -118.95], [34.82, -117.65]], url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
+    { id: 'orange',          name: 'Orange',          apnField: 'APN', bounds: [[33.38, -118.12], [33.95, -117.41]], url: '', taxDefaultUrl: '' },
+    { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', bounds: [[32.53, -117.60], [33.51, -116.08]], url: '', taxDefaultUrl: '' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', bounds: [[34.74, -120.06], [36.10, -117.63]], url: '', mapboxTileset: 'tommytex.kern-county-parcels', mapboxLayer: 'kern_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
+    { id: 'fresno',          name: 'Fresno',          apnField: 'APN', bounds: [[35.79, -120.53], [37.57, -118.36]], url: '', taxDefaultUrl: '' },
+    { id: 'tulare',          name: 'Tulare',          apnField: 'APN', bounds: [[35.79, -119.57], [36.74, -118.20]], url: '', taxDefaultUrl: '' },
+    { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', bounds: [[38.02, -121.86], [38.73, -120.91]], url: '', taxDefaultUrl: '' },
+    { id: 'santa-clara',     name: 'Santa Clara',     apnField: 'APN', bounds: [[36.89, -122.20], [37.48, -121.21]], url: '', taxDefaultUrl: '' },
+    { id: 'alameda',         name: 'Alameda',         apnField: 'APN', bounds: [[37.45, -122.37], [37.91, -121.47]], url: '', taxDefaultUrl: '' },
+    { id: 'contra-costa',    name: 'Contra Costa',    apnField: 'APN', bounds: [[37.69, -122.42], [38.10, -121.55]], url: '', taxDefaultUrl: '' },
+    { id: 'ventura',         name: 'Ventura',         apnField: 'APN', bounds: [[33.93, -119.44], [34.83, -118.62]], url: '', taxDefaultUrl: '' },
+    { id: 'santa-barbara',   name: 'Santa Barbara',   apnField: 'APN', bounds: [[34.35, -120.63], [35.05, -119.45]], url: '', taxDefaultUrl: '' },
+    { id: 'san-luis-obispo', name: 'San Luis Obispo', apnField: 'APN', bounds: [[34.90, -121.33], [35.80, -119.46]], url: '', taxDefaultUrl: '' },
+    { id: 'monterey',        name: 'Monterey',        apnField: 'APN', bounds: [[35.79, -122.00], [36.92, -120.21]], url: '', taxDefaultUrl: '' },
+    { id: 'san-francisco',   name: 'San Francisco',   apnField: 'APN', bounds: [[37.63, -123.17], [37.93, -122.28]], url: '', taxDefaultUrl: '' },
+    { id: 'stanislaus',      name: 'Stanislaus',      apnField: 'APN', bounds: [[37.18, -121.25], [37.87, -120.29]], url: '', taxDefaultUrl: '' },
+    { id: 'san-joaquin',     name: 'San Joaquin',     apnField: 'APN', bounds: [[37.48, -121.58], [38.18, -120.92]], url: '', taxDefaultUrl: '' },
+    { id: 'shasta',          name: 'Shasta',          apnField: 'APN', bounds: [[40.07, -123.07], [40.87, -121.31]], url: '', taxDefaultUrl: '' },
   ],
 };
 
@@ -778,38 +778,74 @@ function renderCountyGrid(activeId = null) {
   });
 }
 
-// Fetch county outline from CA counties GeoJSON, draw as boundary, zoom to fit.
-async function loadCountyBoundary(countyName) {
+// Session cache for CA counties GeoJSON — fetched at most once per page load
+let _caCountiesGeoJSON = null;
+
+// Draw county outline and zoom to fit. Accepts the full county catalog object.
+async function loadCountyBoundary(county) {
+  const countyName = (typeof county === 'string') ? county : county.name;
+  const hardBounds = (typeof county === 'object' && county.bounds) ? county.bounds : null;
+
+  // Remove any previous boundary layer
   if (state.county.boundaryLayer) {
     map.removeLayer(state.county.boundaryLayer);
     state.county.boundaryLayer = null;
   }
 
+  // ── Step 1: Zoom immediately using hardcoded bounds (no network needed) ──
+  if (hardBounds) {
+    map.fitBounds(hardBounds, { padding: [24, 24] });
+  }
+
+  // ── Step 2: Draw visual outline from GeoJSON ──
   try {
-    const url = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json';
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const gj  = await res.json();
+    if (!_caCountiesGeoJSON) {
+      const res = await fetch(
+        'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json'
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      _caCountiesGeoJSON = await res.json();
+    }
 
-    // Match flexibly — file may use "Los Angeles" or "Los Angeles County"
-    const normalize = s => s.toLowerCase().replace(/\s+county$/i, '').trim();
-    const target    = normalize(countyName);
-    const match     = (gj.features || []).find(f =>
-      normalize(f.properties.name || '') === target
-    );
-    if (!match) throw new Error('County not found: ' + countyName);
+    // Flexible name match — handles "Los Angeles", "Los Angeles County", etc.
+    const norm   = s => (s || '').toLowerCase().replace(/\s+county$/i, '').trim();
+    const target = norm(countyName);
+    const features = _caCountiesGeoJSON.features || [];
 
-    const layer = L.geoJSON({ type: 'FeatureCollection', features: [match] }, {
-      style: { color: '#ffffff', weight: 2.5, opacity: 0.6, fill: false, dashArray: '6 4' },
-      interactive: false,
+    // Try property keys: name, NAME, county_name, COUNTY_NAME
+    const match = features.find(f => {
+      const p = f.properties || {};
+      return ['name', 'NAME', 'county_name', 'COUNTY_NAME'].some(
+        k => norm(p[k]) === target
+      );
     });
+
+    if (!match) throw new Error('County not found in GeoJSON: ' + countyName);
+
+    const layer = L.geoJSON(
+      { type: 'FeatureCollection', features: [match] },
+      {
+        style: {
+          color:     '#FFD700', // bright gold — clearly visible on satellite
+          weight:    3,
+          opacity:   1,
+          fill:      false,
+          dashArray: '8 5',
+        },
+        interactive: false,
+      }
+    );
     layer.addTo(map);
     state.county.boundaryLayer = layer;
-    map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+
+    // Re-zoom to the GeoJSON bounds if we didn't have hardcoded bounds
+    if (!hardBounds) {
+      map.fitBounds(layer.getBounds(), { padding: [24, 24] });
+    }
   } catch (e) {
-    console.warn('County boundary fetch failed:', e.message);
-    // Fallback — zoom using parcel layer bounds if available
-    if (state.county.layer && !state.county.isMapbox) {
+    console.warn('County boundary outline failed:', e.message);
+    // Fallback zoom for non-Mapbox counties if hardcoded bounds also missing
+    if (!hardBounds && state.county.layer && !state.county.isMapbox) {
       try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (_) {}
     }
   }
@@ -869,7 +905,7 @@ async function loadCountyFromURL(county) {
     addCountyLayer(gj);
     updateBadge('county', count);
 
-    await loadCountyBoundary(county.name);
+    await loadCountyBoundary(county);
 
     // Rebuild dependent attribute-only layers
     const owHasGeom = state.ownership.geojson &&
@@ -959,7 +995,7 @@ async function loadCountyFromMapbox(county) {
 
   try {
     buildMapboxVectorLayer(county);
-    await loadCountyBoundary(county.name);
+    await loadCountyBoundary(county);
 
     state.county.fields  = [];
     state.county.geojson = null; // no GeoJSON — tiles are streamed
