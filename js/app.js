@@ -800,11 +800,21 @@ async function loadCountyBoundary(county) {
   // ── Step 2: Draw visual outline from GeoJSON ──
   try {
     if (!_caCountiesGeoJSON) {
-      const res = await fetch(
-        'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json'
-      );
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      _caCountiesGeoJSON = await res.json();
+      // jsDelivr mirrors GitHub repos with reliable CORS; fall back to raw.githubusercontent.com
+      const urls = [
+        'https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/california-counties.json',
+        'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json',
+      ];
+      let lastErr;
+      for (const src of urls) {
+        try {
+          const res = await fetch(src);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          _caCountiesGeoJSON = await res.json();
+          break;
+        } catch (err) { lastErr = err; }
+      }
+      if (!_caCountiesGeoJSON) throw lastErr;
     }
 
     // Flexible name match — handles "Los Angeles", "Los Angeles County", etc.
@@ -1560,7 +1570,7 @@ async function loadTaxDefaultFromURL(url) {
   showLoading('Loading tax default list from cloud\u2026');
   try {
     const geojson = await parseFromURL(url);
-    applyTaxDefaultData(geojson);
+    applyTaxDefaultData(geojson, /* skipZoom= */ true);
     // Mark the drop zone as cloud-synced so CSS can show the badge
     document.getElementById('drop-taxdefault').setAttribute('data-cloud-loaded', 'true');
     document.getElementById('taxdefault-cloud-notice').style.display = 'flex';
@@ -1575,7 +1585,8 @@ async function loadTaxDefaultFromURL(url) {
 
 // Shared helper — apply a parsed tax-default GeoJSON to state and the map.
 // Called by both the manual file upload path and the auto-load-from-URL path.
-function applyTaxDefaultData(geojson) {
+// skipZoom=true when the county auto-loads this data (county zoom already set).
+function applyTaxDefaultData(geojson, skipZoom = false) {
   const fields  = getFields(geojson);
   const count   = (geojson.features || []).length;
   const hasGeom = (geojson.features || []).some(f => f.geometry);
@@ -1607,7 +1618,7 @@ function applyTaxDefaultData(geojson) {
   addTaxDefaultLayer(geojson);
   updateBadge('taxdefault', count);
 
-  if (state.taxdefault.layer) {
+  if (!skipZoom && state.taxdefault.layer) {
     try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
   }
 }
