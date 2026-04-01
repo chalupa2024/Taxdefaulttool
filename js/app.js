@@ -778,12 +778,11 @@ function renderCountyGrid(activeId = null) {
   });
 }
 
-// Session cache for CA counties GeoJSON — fetched at most once per page load
-let _caCountiesGeoJSON = null;
+// Per-county boundary polygon cache (keyed by county id)
+const _countyBoundaryCache = {};
 
 // Draw county outline and zoom to fit. Accepts the full county catalog object.
 async function loadCountyBoundary(county) {
-  const countyName = (typeof county === 'string') ? county : county.name;
   const hardBounds = (typeof county === 'object' && county.bounds) ? county.bounds : null;
 
   // Remove any previous boundary layer
@@ -792,87 +791,47 @@ async function loadCountyBoundary(county) {
     state.county.boundaryLayer = null;
   }
 
-  // ── Step 1: Zoom + draw rectangle outline immediately (guaranteed, no network) ──
+  // ── Step 1: Zoom + draw rectangle immediately (guaranteed, no network) ──
   if (hardBounds) {
     map.fitBounds(hardBounds, { padding: [24, 24] });
 
     const rectLayer = L.rectangle(hardBounds, {
-      color:       '#FFD700',
-      weight:      2,
-      opacity:     0.7,
-      fill:        false,
-      dashArray:   '8 5',
-      interactive: false,
+      color: '#FFD700', weight: 2, opacity: 0.7, fill: false,
+      dashArray: '8 5', interactive: false,
     });
     rectLayer.addTo(map);
     state.county.boundaryLayer = rectLayer;
   }
 
-  // ── Step 2: Try to upgrade to exact polygon outline from GeoJSON ──
+  // ── Step 2: Upgrade to exact polygon via Nominatim (OpenStreetMap) ──
   try {
-    if (!_caCountiesGeoJSON) {
-      // jsDelivr mirrors GitHub repos with reliable CORS; fall back to raw.githubusercontent.com
-      const urls = [
-        'https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/california-counties.json',
-        'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/california-counties.json',
-      ];
-      let lastErr;
-      for (const src of urls) {
-        try {
-          const res = await fetch(src);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          _caCountiesGeoJSON = await res.json();
-          break;
-        } catch (err) { lastErr = err; }
-      }
-      if (!_caCountiesGeoJSON) throw lastErr;
+    let feature = _countyBoundaryCache[county.id];
+
+    if (!feature) {
+      // Nominatim returns the exact county polygon, CORS-friendly, no key needed
+      const q   = encodeURIComponent(county.name + ' County, California, USA');
+      const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=geojson&polygon_geojson=1&limit=1`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error('Nominatim HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.features || !data.features.length) throw new Error('No result for ' + county.name);
+      feature = data.features[0];
+      _countyBoundaryCache[county.id] = feature;
     }
 
-    // Flexible name match — handles "Los Angeles", "Los Angeles County", etc.
-    const norm   = s => (s || '').toLowerCase().replace(/\s+county$/i, '').trim();
-    const target = norm(countyName);
-    const features = _caCountiesGeoJSON.features || [];
-
-    // Try property keys: name, NAME, county_name, COUNTY_NAME
-    const match = features.find(f => {
-      const p = f.properties || {};
-      return ['name', 'NAME', 'county_name', 'COUNTY_NAME'].some(
-        k => norm(p[k]) === target
-      );
-    });
-
-    if (!match) throw new Error('County not found in GeoJSON: ' + countyName);
-
-    // Replace the rectangle with the exact polygon
+    // Replace rectangle with exact county polygon
     if (state.county.boundaryLayer) {
       map.removeLayer(state.county.boundaryLayer);
       state.county.boundaryLayer = null;
     }
-    const polyLayer = L.geoJSON(
-      { type: 'FeatureCollection', features: [match] },
-      {
-        style: {
-          color:     '#FFD700',
-          weight:    3,
-          opacity:   1,
-          fill:      false,
-          dashArray: '8 5',
-        },
-        interactive: false,
-      }
-    );
+    const polyLayer = L.geoJSON(feature, {
+      style: { color: '#FFD700', weight: 3, opacity: 1, fill: false, dashArray: '8 5' },
+      interactive: false,
+    });
     polyLayer.addTo(map);
     state.county.boundaryLayer = polyLayer;
-
-    // Zoom to exact polygon bounds if no hardcoded bounds
-    if (!hardBounds) {
-      map.fitBounds(polyLayer.getBounds(), { padding: [24, 24] });
-    }
   } catch (e) {
-    console.warn('County polygon outline failed (rectangle shown instead):', e.message);
-    if (!hardBounds && state.county.layer && !state.county.isMapbox) {
-      try { map.fitBounds(state.county.layer.getBounds(), { padding: [20, 20] }); } catch (_) {}
-    }
+    console.warn('County polygon fetch failed (rectangle shown):', e.message);
   }
 }
 
