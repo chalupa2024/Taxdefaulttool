@@ -611,6 +611,24 @@ html, body {
   flex-shrink: 0;
 }
 
+.list-search-wrap {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.list-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  outline: none;
+}
+.list-search-input:focus { border-color: var(--color-accent); }
+
 .parcel-list-cards {
   flex: 1;
   overflow-y: auto;
