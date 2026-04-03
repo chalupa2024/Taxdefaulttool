@@ -578,12 +578,127 @@ html, body {
   flex: 1;
   position: relative;
   overflow: hidden;
+  display: flex; /* enables side-by-side map + list panel */
 }
 
 #map {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   background: #1a1d27;
+}
+
+/* ---- Parcel List Panel ---- */
+.parcel-list-panel {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border);
+  overflow: hidden;
+  z-index: 10;
+}
+
+.list-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.parcel-list-cards {
+  flex: 1;
+  overflow-y: auto;
+}
+.parcel-list-cards::-webkit-scrollbar { width: 4px; }
+.parcel-list-cards::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+/* ---- Parcel Card ---- */
+.parcel-card {
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.12s;
+}
+.parcel-card:hover { background: var(--color-surface); }
+
+.card-image-wrap {
+  position: relative;
+  height: 160px;
+  overflow: hidden;
+  background: var(--color-surface-2);
+}
+
+.card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  gap: 6px;
+}
+
+.card-sv-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.72);
+  color: #fff;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(2px);
+}
+.card-sv-badge:hover { background: rgba(0,0,0,0.92); }
+
+.card-body {
+  padding: 10px 12px;
+}
+
+.card-price {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: 5px;
+}
+
+.card-apn {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.card-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.card-area-tag {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 10px;
+  background: rgba(59,130,246,0.15);
+  color: var(--color-primary);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 /* ---- Map Toolbar ---- */

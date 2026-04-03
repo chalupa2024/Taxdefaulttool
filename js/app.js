@@ -1349,8 +1349,9 @@ function renderResultsList(features, filter = '') {
     summary.textContent = `${visible.length} parcels`;
   }
 
-  // Refresh map layer to show only visible (filtered) parcels
+  // Refresh map layer and list panel to show only visible (filtered) parcels
   addMatchedLayer(visible);
+  renderParcelListView(visible);
 }
 
 function updateMatchStatus(count) {
@@ -1443,6 +1444,121 @@ window.showParcelModalById = function(apn) {
   });
   if (feature) showParcelModal(feature, 'matched');
 };
+
+// ─── Parcel List View (Zillow-style) ─────────────────────────────────────────
+
+// Detects a street address field from parcel properties
+function guessAddressField(fields) {
+  const candidates = ['situs', 'situs_addr', 'site_addr', 'site_address', 'address',
+    'full_address', 'addr', 'street_address', 'property_address'];
+  return fields.find(f => candidates.includes(f.toLowerCase().replace(/[\s_\-]/g, ''))) || null;
+}
+
+function renderParcelListView(features) {
+  const panel      = document.getElementById('parcel-list-panel');
+  const cards      = document.getElementById('parcel-list-cards');
+  const countEl    = document.getElementById('list-panel-count');
+  const toggleBtn  = document.getElementById('btn-list-view');
+
+  // Always update count; show/hide toggle button
+  countEl.textContent = `${features.length} parcel${features.length !== 1 ? 's' : ''}`;
+  toggleBtn.style.display = features.length ? 'block' : 'none';
+
+  // Only populate cards if panel is open
+  if (panel.style.display === 'none') return;
+
+  cards.innerHTML = '';
+
+  const idField    = state.taxdefault.idField || state.ownership.idField;
+  const amtField   = state.taxdefault.amountField;
+  const ownerField = state.taxdefault.ownerField;
+  const acreField  = state.county.acreField;
+  const acreConv   = state.county.acreConvFactor;
+
+  // Detect address field from the first feature with properties
+  const sampleProps = (features[0] || {}).properties || {};
+  const addrField   = guessAddressField(Object.keys(sampleProps));
+
+  features.forEach(feature => {
+    const props    = feature.properties || {};
+    const apn      = idField    ? props[idField]    : null;
+    const amount   = amtField   ? props[amtField]   : null;
+    const owner    = ownerField ? props[ownerField] : null;
+    const consArea = props.Conservation_Area        || null;
+    const address  = addrField  ? props[addrField]  : null;
+
+    let acres = null;
+    if (acreField && props[acreField] != null) {
+      const raw = parseFloat(props[acreField]);
+      if (!isNaN(raw)) acres = (raw * acreConv).toFixed(2);
+    }
+
+    // Image: Mapbox satellite static tile centred on parcel
+    let imageHtml = `<div class="card-img-placeholder">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+      </svg>No geometry</div>`;
+    let svHref = null;
+
+    if (feature.geometry) {
+      const center = getCentroid(feature.geometry);
+      if (center) {
+        const [lon, lat] = center;
+        const imgUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/`
+          + `${lon.toFixed(6)},${lat.toFixed(6)},16/380x160?access_token=${MAPBOX_PUBLIC_TOKEN}`;
+        imageHtml = `<img src="${imgUrl}" alt="Satellite" loading="lazy" class="card-img" />`;
+        // Street View deep link — no API key needed
+        svHref = `https://www.google.com/maps?layer=c&cbll=${lat.toFixed(6)},${lon.toFixed(6)}`;
+      }
+    }
+
+    const card = document.createElement('div');
+    card.className = 'parcel-card';
+    card.innerHTML = `
+      <div class="card-image-wrap">
+        ${imageHtml}
+        ${svHref ? `<a href="${svHref}" target="_blank" rel="noopener" class="card-sv-badge" title="Open in Google Street View">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          Street View</a>` : ''}
+      </div>
+      <div class="card-body">
+        ${amount   ? `<div class="card-price">${formatCurrency(amount)}</div>` : ''}
+        <div class="card-apn">${apn || '—'}</div>
+        ${address  ? `<div class="card-meta">${address}</div>` : ''}
+        ${owner    ? `<div class="card-meta">${owner}</div>` : ''}
+        ${acres    ? `<div class="card-meta">${acres} acres</div>` : ''}
+        ${consArea ? `<span class="card-area-tag">${consArea}</span>` : ''}
+      </div>`;
+
+    card.addEventListener('click', e => {
+      if (e.target.closest('.card-sv-badge')) return;
+      showParcelModal(feature, 'matched');
+      if (feature.geometry) {
+        const center = getCentroid(feature.geometry);
+        if (center) map.setView([center[1], center[0]], 16);
+      }
+    });
+
+    cards.appendChild(card);
+  });
+}
+
+// Toggle list view open/closed
+function setListViewOpen(open) {
+  const panel     = document.getElementById('parcel-list-panel');
+  const toggleBtn = document.getElementById('btn-list-view');
+  panel.style.display = open ? 'flex' : 'none';
+  toggleBtn.textContent = open ? '✕ List' : '☰ List';
+  map.invalidateSize();
+  if (open) renderParcelListView(state.matched);
+}
+
+document.getElementById('btn-list-view').addEventListener('click', () => {
+  const isOpen = document.getElementById('parcel-list-panel').style.display !== 'none';
+  setListViewOpen(!isOpen);
+});
+
+document.getElementById('btn-close-list').addEventListener('click', () => setListViewOpen(false));
 
 // ─── CSV Export ───────────────────────────────────────────────────────────────
 

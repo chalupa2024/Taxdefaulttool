@@ -297,7 +297,17 @@
         <button id="btn-show-results" class="btn btn-sm" style="display:none;">
           Show Results (<span id="toolbar-count">0</span>)
         </button>
+        <button id="btn-list-view" class="btn btn-sm" style="display:none;">&#9776; List</button>
         <button id="btn-basemap-toggle" class="btn btn-sm">Satellite</button>
+      </div>
+
+      <!-- Parcel list panel (Zillow-style, right side) -->
+      <div id="parcel-list-panel" class="parcel-list-panel" style="display:none;">
+        <div class="list-panel-header">
+          <span id="list-panel-count">0 parcels</span>
+          <button id="btn-close-list" class="btn-icon" title="Close list">✕</button>
+        </div>
+        <div id="parcel-list-cards" class="parcel-list-cards"></div>
       </div>
     </main>
 
