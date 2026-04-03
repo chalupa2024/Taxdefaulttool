@@ -14,6 +14,12 @@ const state = {
     idField:       null,
     fields:        [],
     isMapbox:      false,
+    acreField:     null,   // detected acreage field name
+    acreConvFactor: 1,     // multiply raw value by this to get acres
+  },
+  filters: {
+    maxBid:   null,   // show parcels with bid <= this (null = no filter)
+    maxAcres: null,   // show parcels with acres <= this (null = no filter)
   },
   ownership: {
     geojson:   null,   // user's ownership data (may be attribute-only)
@@ -255,6 +261,24 @@ function guessOwnerField(fields) {
     if (match) return match;
   }
   return '';
+}
+
+// Returns { field, convFactor } where convFactor converts raw value → acres.
+function guessAcreageField(fields) {
+  // Fields already in acres
+  const acreNames = ['gis_acres', 'acres', 'acreage', 'area_acres', 'calc_acres',
+    'landacres', 'lotacres', 'aclippedac', 'landsize_acres'];
+  for (const name of acreNames) {
+    const f = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === name.replace(/[\s_\-]/g, ''));
+    if (f) return { field: f, convFactor: 1 };
+  }
+  // Shape_Area — typically sq ft in US-projected data; 1 acre = 43,560 sq ft
+  const sqftNames = ['shape_area', 'shapearea', 'shape__area', 'area'];
+  for (const name of sqftNames) {
+    const f = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === name.replace(/[\s_\-]/g, ''));
+    if (f) return { field: f, convFactor: 1 / 43560 };
+  }
+  return null;
 }
 
 // ─── Populate field selectors ─────────────────────────────────────────────────
@@ -881,6 +905,11 @@ async function loadCountyFromURL(county) {
       ? county.apnField
       : guessIdField(fields);
 
+    // Detect acreage field for the acreage filter
+    const acreGuess = guessAcreageField(fields);
+    state.county.acreField      = acreGuess ? acreGuess.field      : null;
+    state.county.acreConvFactor = acreGuess ? acreGuess.convFactor : 1;
+
     populateFieldSelect('county-id-field', fields, state.county.idField);
     document.getElementById('county-field-map').style.display = 'block';
     document.getElementById('county-controls').style.display  = 'flex';
@@ -1254,13 +1283,22 @@ function renderResultsList(features, filter = '') {
     ? sorted.filter(f => JSON.stringify(f.properties).toLowerCase().includes(filterLower))
     : sorted;
 
-  // Filter by minimum bid amount
-  const minBidVal = parseFloat(document.getElementById('min-bid-input').value);
-  if (!isNaN(minBidVal) && minBidVal > 0 && state.taxdefault.amountField) {
+  // Filter by max bid (Under $X)
+  if (state.filters.maxBid && state.taxdefault.amountField) {
     const af = state.taxdefault.amountField;
     visible = visible.filter(f => {
-      const raw = String((f.properties || {})[af] || '').replace(/[^\d.]/g, '');
-      return parseFloat(raw) >= minBidVal;
+      const raw = parseFloat(String((f.properties || {})[af] || '').replace(/[^\d.]/g, ''));
+      return !isNaN(raw) && raw <= state.filters.maxBid;
+    });
+  }
+
+  // Filter by max acreage
+  if (state.filters.maxAcres && state.county.acreField) {
+    const af   = state.county.acreField;
+    const conv = state.county.acreConvFactor;
+    visible = visible.filter(f => {
+      const raw = parseFloat((f.properties || {})[af]);
+      return !isNaN(raw) && raw * conv <= state.filters.maxAcres;
     });
   }
 
@@ -1609,9 +1647,6 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
   populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
   populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
 
-  // Show min bid row only when an amount field is detected
-  document.getElementById('min-bid-row').style.display = state.taxdefault.amountField ? 'flex' : 'none';
-
   document.getElementById('taxdefault-field-map').style.display = 'block';
   document.getElementById('drop-taxdefault').classList.add('loaded');
   showNoGeomNotice('taxdefault', hasGeom);
@@ -1786,11 +1821,6 @@ document.getElementById('taxdefault-id-field').addEventListener('change', e => {
 
 document.getElementById('taxdefault-amount-field').addEventListener('change', e => {
   state.taxdefault.amountField = e.target.value;
-  document.getElementById('min-bid-row').style.display = e.target.value ? 'flex' : 'none';
-  if (!e.target.value) {
-    document.getElementById('min-bid-input').value = '';
-    renderResultsList(state.matched, document.getElementById('results-search').value);
-  }
 });
 
 document.getElementById('taxdefault-owner-field').addEventListener('change', e => {
@@ -1857,14 +1887,87 @@ document.getElementById('results-sort').addEventListener('change', () => {
   renderResultsList(state.matched, document.getElementById('results-search').value);
 });
 
-document.getElementById('min-bid-input').addEventListener('input', () => {
-  renderResultsList(state.matched, document.getElementById('results-search').value);
+// ─── Filter bar pill logic ────────────────────────────────────────────────────
+
+function getSearchText() {
+  return document.getElementById('results-search').value;
+}
+
+function updateFilterPills() {
+  // Bid pills
+  document.querySelectorAll('.fpill-option[data-max-bid]').forEach(btn => {
+    const val = btn.dataset.maxBid ? Number(btn.dataset.maxBid) : null;
+    btn.classList.toggle('active', val === state.filters.maxBid);
+  });
+  const bidBtn = document.getElementById('bid-fpill-btn');
+  bidBtn.classList.toggle('active', state.filters.maxBid !== null);
+
+  // Acres pills
+  document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
+    const val = btn.dataset.maxAcres ? Number(btn.dataset.maxAcres) : null;
+    btn.classList.toggle('active', val === state.filters.maxAcres);
+  });
+  const acresBtn = document.getElementById('acres-fpill-btn');
+  acresBtn.classList.toggle('active', state.filters.maxAcres !== null);
+
+  // Clear-all button
+  const anyActive = state.filters.maxBid !== null || state.filters.maxAcres !== null;
+  document.getElementById('fbar-clear-all').style.display = anyActive ? 'block' : 'none';
+}
+
+function closeFpillMenus() {
+  document.querySelectorAll('.fpill-menu').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.fpill-btn').forEach(b => b.removeAttribute('aria-expanded'));
+}
+
+function toggleFpillMenu(menuId, btnId) {
+  const menu = document.getElementById(menuId);
+  const btn  = document.getElementById(btnId);
+  const isOpen = menu.classList.contains('open');
+  closeFpillMenus();
+  if (!isOpen) {
+    menu.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+document.getElementById('bid-fpill-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  toggleFpillMenu('bid-fpill-menu', 'bid-fpill-btn');
 });
 
-document.getElementById('btn-clear-min-bid').addEventListener('click', () => {
-  document.getElementById('min-bid-input').value = '';
-  renderResultsList(state.matched, document.getElementById('results-search').value);
+document.getElementById('acres-fpill-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  toggleFpillMenu('acres-fpill-menu', 'acres-fpill-btn');
 });
+
+document.querySelectorAll('.fpill-option[data-max-bid]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.filters.maxBid = btn.dataset.maxBid ? Number(btn.dataset.maxBid) : null;
+    closeFpillMenus();
+    updateFilterPills();
+    renderResultsList(state.matched, getSearchText());
+  });
+});
+
+document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.filters.maxAcres = btn.dataset.maxAcres ? Number(btn.dataset.maxAcres) : null;
+    closeFpillMenus();
+    updateFilterPills();
+    renderResultsList(state.matched, getSearchText());
+  });
+});
+
+document.getElementById('fbar-clear-all').addEventListener('click', () => {
+  state.filters.maxBid   = null;
+  state.filters.maxAcres = null;
+  updateFilterPills();
+  renderResultsList(state.matched, getSearchText());
+});
+
+// Close menus when clicking outside
+document.addEventListener('click', closeFpillMenus);
 
 // Export
 document.getElementById('btn-export').addEventListener('click', exportMatchedCSV);

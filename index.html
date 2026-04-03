@@ -48,6 +48,44 @@
     </div>
   </header>
 
+  <!-- Filter Bar -->
+  <div class="filter-bar" id="filter-bar">
+    <!-- Min Bid dropdown -->
+    <div class="fpill-wrap" id="bid-fpill">
+      <button class="fpill-btn" id="bid-fpill-btn" type="button">
+        <span id="bid-fpill-label">Min Bid</span>
+        <svg class="fpill-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
+      </button>
+      <div class="fpill-menu" id="bid-fpill-menu">
+        <button class="fpill-option active" data-max-bid="">Any price</button>
+        <button class="fpill-option" data-max-bid="5000">Under $5K</button>
+        <button class="fpill-option" data-max-bid="10000">Under $10K</button>
+        <button class="fpill-option" data-max-bid="25000">Under $25K</button>
+        <button class="fpill-option" data-max-bid="50000">Under $50K</button>
+        <button class="fpill-option" data-max-bid="100000">Under $100K</button>
+        <button class="fpill-option" data-max-bid="250000">Under $250K</button>
+      </div>
+    </div>
+
+    <div class="fbar-divider"></div>
+
+    <!-- Acreage dropdown -->
+    <div class="fpill-wrap" id="acres-fpill">
+      <button class="fpill-btn" id="acres-fpill-btn" type="button">
+        <span id="acres-fpill-label">Acreage</span>
+        <svg class="fpill-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
+      </button>
+      <div class="fpill-menu" id="acres-fpill-menu">
+        <button class="fpill-option active" data-max-acres="">Any size</button>
+        <button class="fpill-option" data-max-acres="5">5 acres or less</button>
+        <button class="fpill-option" data-max-acres="10">10 acres or less</button>
+        <button class="fpill-option" data-max-acres="50">50 acres or less</button>
+      </div>
+    </div>
+
+    <button class="fbar-clear" id="fbar-clear-all" style="display:none;" type="button">Clear filters</button>
+  </div>
+
   <!-- Main Layout -->
   <div class="app-body">
 
@@ -189,14 +227,6 @@
           <label>Owner field (optional):
             <select id="taxdefault-owner-field"><option value="">— none —</option></select>
           </label>
-          <div class="min-bid-row" id="min-bid-row" style="display:none;">
-            <label class="min-bid-label">Min Bid Filter</label>
-            <div class="min-bid-wrap">
-              <span class="min-bid-prefix">$</span>
-              <input type="number" id="min-bid-input" placeholder="0" min="0" step="1000" />
-              <button id="btn-clear-min-bid" class="btn-clear-inline" title="Clear">✕</button>
-            </div>
-          </div>
         </div>
         <div id="taxdefault-no-geom-notice" class="no-geom-notice" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

@@ -81,10 +81,116 @@ html, body {
   gap: 8px;
 }
 
+/* ---- Filter Bar ---- */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 46px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 90;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+
+.fpill-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.fpill-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.fpill-btn:hover { border-color: var(--color-text-muted); }
+.fpill-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.fpill-chevron {
+  width: 10px;
+  height: 6px;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.fpill-btn[aria-expanded="true"] .fpill-chevron {
+  transform: rotate(180deg);
+}
+
+.fpill-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 200;
+  min-width: 170px;
+  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+}
+.fpill-menu.open { display: flex; }
+
+.fpill-option {
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--color-text);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fpill-option:hover { background: var(--color-surface-2); }
+.fpill-option.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.fbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.fbar-clear {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.fbar-clear:hover { text-decoration: underline; }
+
 /* ---- Layout ---- */
 .app-body {
   display: flex;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 56px - 46px);
   overflow: hidden;
 }
 
@@ -561,62 +667,6 @@ html, body {
   cursor: pointer;
 }
 
-.min-bid-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.min-bid-label {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  font-weight: normal !important;
-}
-
-.min-bid-wrap {
-  display: flex;
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  flex: 1;
-}
-
-.min-bid-prefix {
-  padding: 0 6px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  border-right: 1px solid var(--color-border);
-  line-height: 26px;
-}
-
-#min-bid-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--color-text);
-  padding: 3px 6px;
-  font-size: 12px;
-  min-width: 0;
-}
-#min-bid-input:focus { outline: none; }
-#min-bid-input::placeholder { color: var(--color-text-muted); }
-#min-bid-input::-webkit-inner-spin-button,
-#min-bid-input::-webkit-outer-spin-button { opacity: 0.5; }
-
-.btn-clear-inline {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 0 6px;
-  font-size: 11px;
-  line-height: 26px;
-}
-.btn-clear-inline:hover { color: var(--color-text); }
 
 .results-list {
   flex: 1;
@@ -1072,7 +1122,7 @@ html, body {
   /* Full-screen body — map fills everything, sidebar overlays */
   .app-body {
     flex-direction: column;
-    height: calc(100vh - 52px - 60px); /* minus header and mobile nav */
+    height: calc(100vh - 52px - 46px - 60px); /* header + filter bar + mobile nav */
   }
 
   /* Map always fills the body */
