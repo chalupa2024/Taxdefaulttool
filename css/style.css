@@ -81,32 +81,21 @@ html, body {
   gap: 8px;
 }
 
-/* ---- Filter Bar ---- */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  height: 46px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-  position: relative;
-  z-index: 90;
-  /* overflow must be visible so the dropdown menus aren't clipped */
-  overflow: visible;
+/* ---- Map Filter Bar (floating overlay, upper-left of map) ---- */
+.map-filter-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  pointer-events: none; /* let clicks fall through to map except on pills */
 }
 
-/* Scrollable pill row inside — handles mobile overflow without clipping dropdowns */
 .filter-bar-pills {
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow-x: auto;
-  overflow-y: visible;
-  flex: 1;
-  padding-bottom: 2px; /* room for box-shadow */
+  pointer-events: auto;
 }
-.filter-bar-pills::-webkit-scrollbar { display: none; }
 
 .fpill-wrap {
   position: relative;
@@ -118,13 +107,14 @@ html, body {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: transparent;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 20px;
   color: var(--color-text);
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
   transition: border-color 0.15s, background 0.15s;
 }
 .fpill-btn:hover { border-color: var(--color-text-muted); }
@@ -200,7 +190,7 @@ html, body {
 /* ---- Layout ---- */
 .app-body {
   display: flex;
-  height: calc(100vh - 56px - 46px);
+  height: calc(100vh - 56px);
   overflow: hidden;
 }
 
@@ -1132,7 +1122,7 @@ html, body {
   /* Full-screen body — map fills everything, sidebar overlays */
   .app-body {
     flex-direction: column;
-    height: calc(100vh - 52px - 46px - 60px); /* header + filter bar + mobile nav */
+    height: calc(100vh - 52px - 60px); /* header + mobile nav */
   }
 
   /* Map always fills the body */
