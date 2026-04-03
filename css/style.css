@@ -85,7 +85,6 @@ html, body {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
   padding: 0 16px;
   height: 46px;
   background: var(--color-surface);
@@ -93,10 +92,21 @@ html, body {
   flex-shrink: 0;
   position: relative;
   z-index: 90;
+  /* overflow must be visible so the dropdown menus aren't clipped */
+  overflow: visible;
+}
+
+/* Scrollable pill row inside — handles mobile overflow without clipping dropdowns */
+.filter-bar-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   overflow-x: auto;
   overflow-y: visible;
+  flex: 1;
+  padding-bottom: 2px; /* room for box-shadow */
 }
-.filter-bar::-webkit-scrollbar { display: none; }
+.filter-bar-pills::-webkit-scrollbar { display: none; }
 
 .fpill-wrap {
   position: relative;
