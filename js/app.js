@@ -170,6 +170,19 @@ const STYLE_MATCHED = {
 
 // ─── Utility: Show/Hide Loading ───────────────────────────────────────────────
 
+function showToast(msg, duration = 3500) {
+  let el = document.getElementById('app-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('visible'), duration);
+}
+
 function showLoading(msg = 'Processing...') {
   document.getElementById('loading-overlay').style.display = 'flex';
   document.getElementById('loading-msg').textContent = msg;
@@ -811,6 +824,10 @@ function renderCountyGrid(activeId = null) {
 // Per-county boundary polygon cache (keyed by county id)
 const _countyBoundaryCache = {};
 
+// Caches parcel centroids (AIN → {lat, lng}) discovered via map tile clicks.
+// Lets list-card clicks zoom to parcels that have been touched on the map.
+const _parcelLocationCache = new Map();
+
 // Draw county outline and zoom to fit. Accepts the full county catalog object.
 async function loadCountyBoundary(county) {
   const hardBounds = (typeof county === 'object' && county.bounds) ? county.bounds : null;
@@ -994,6 +1011,16 @@ function buildMapboxVectorLayer(county) {
     L.DomEvent.stopPropagation(e);
     const props = e.layer.properties || {};
     const ain = normalizeId(props[idField] || props.AIN || props.APN || '');
+
+    // Cache this parcel's location — prefer polygon centroid, fall back to click point
+    if (ain) {
+      try {
+        _parcelLocationCache.set(ain, e.layer.getBounds().getCenter());
+      } catch (_) {
+        _parcelLocationCache.set(ain, e.latlng);
+      }
+    }
+
     // Merge in tax default spreadsheet data if available
     let tdProps = {};
     if (state.taxdefault.geojson && state.taxdefault.idField) {
@@ -1478,19 +1505,20 @@ function guessAddressField(fields) {
 
 // Join tax-default spreadsheet rows with county parcel geometry where available.
 // Zoom to and highlight a parcel selected from the list panel.
+// Three-tier location lookup: geometry → cached map click → address geocode
 async function highlightParcelOnMap(feature) {
   const p   = feature.properties || {};
   const ain = normalizeId(p[state.taxdefault.idField] || p[state.county.idField] || '');
 
-  // Update selected AIN for Mapbox vector tile highlight
+  // Update selected AIN — Mapbox vector tile layer redraws with yellow highlight
   state.selectedAin = ain || null;
   if (state.county.isMapbox && state.county.layer) state.county.layer.redraw();
 
-  // Remove any previous highlight
+  // Remove any previous GeoJSON highlight overlay
   if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
 
+  // ── Tier 1: GeoJSON geometry (non-Mapbox counties) ──────────────────────────
   if (feature.geometry) {
-    // GeoJSON geometry available — draw outline and fit bounds
     state.highlightLayer = L.geoJSON(feature, {
       style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
       interactive: false,
@@ -1499,39 +1527,37 @@ async function highlightParcelOnMap(feature) {
     return;
   }
 
-  // No geometry (Mapbox tile county) — geocode the property address to get a location
-  const addrField = guessAddressField(Object.keys(p));
-  const addr = addrField ? p[addrField] : null;
-  if (!addr || !isRealStreetAddress(addr)) return;
-
-  try {
-    const countyName = (state.county.catalog && state.county.catalog.name) || '';
-    const query = encodeURIComponent(`${addr.trim()}, ${countyName} County, California, USA`);
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-      { headers: { 'Accept': 'application/json' } }
-    );
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data || !data.length) return;
-
-    const lat = parseFloat(data[0].lat);
-    const lon = parseFloat(data[0].lon);
-    map.setView([lat, lon], 18);
-
-    // Drop a highlight circle at the geocoded location
-    state.highlightLayer = L.circleMarker([lat, lon], {
-      radius: 14,
-      color: '#facc15',
-      weight: 3,
-      fill: true,
-      fillColor: '#facc15',
-      fillOpacity: 0.25,
-      interactive: false,
-    }).addTo(map);
-  } catch (e) {
-    console.warn('Parcel geocode failed:', e);
+  // ── Tier 2: Cached location from a prior map-tile click ─────────────────────
+  if (ain && _parcelLocationCache.has(ain)) {
+    map.setView(_parcelLocationCache.get(ain), 18);
+    return;
   }
+
+  // ── Tier 3: Geocode the property address (Nominatim, free) ──────────────────
+  const addrField = guessAddressField(Object.keys(p));
+  const addr      = addrField ? p[addrField] : null;
+  if (addr && isRealStreetAddress(addr)) {
+    try {
+      const countyName = (state.county.catalog && state.county.catalog.name) || '';
+      const q = encodeURIComponent(`${addr.trim()}, ${countyName} County, California, USA`);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length) {
+          const latlng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+          if (ain) _parcelLocationCache.set(ain, latlng); // cache for next time
+          map.setView(latlng, 18);
+          return;
+        }
+      }
+    } catch (e) { console.warn('Parcel geocode failed:', e); }
+  }
+
+  // ── No location found ────────────────────────────────────────────────────────
+  showToast('No location data — click this parcel on the map to pin it');
 }
 
 function buildListViewFeatures() {
