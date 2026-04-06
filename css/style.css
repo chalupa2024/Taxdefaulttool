@@ -657,6 +657,16 @@ html, body {
   object-fit: cover;
   display: block;
 }
+/* Shimmer while lazy image hasn't loaded yet */
+.card-img.lazy-img:not([src]) {
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-surface) 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
 .card-img-placeholder {
   width: 100%;

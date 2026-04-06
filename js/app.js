@@ -52,6 +52,10 @@ const state = {
 const MAPBOX_PUBLIC_TOKEN = 'pk.eyJ1IjoidG9tbXl0ZXgiLCJhIjoiY2xl' +
   'b28zdGx5MDRidTN4bWxlN20zaHV5diJ9.6F73wSZ91oFdYtoR8LUdKg';
 
+// Add your Google Maps API key here to enable Street View previews.
+// Requires the "Street View Static API" enabled in Google Cloud Console.
+const GOOGLE_MAPS_KEY = '';
+
 // ─── Basemaps ─────────────────────────────────────────────────────────────────
 
 const BASEMAPS = [
@@ -1561,21 +1565,40 @@ function renderParcelListView(features, totalCount) {
       if (!isNaN(raw)) acres = (raw * acreConv).toFixed(1);
     }
 
-    let imgHtml = `<div class="card-img-placeholder">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        <polyline points="9 22 9 12 15 12 15 22"/></svg></div>`;
-    let svHtml = `<span class="card-sv-na">Street View not available</span>`;
-
+    // Determine satellite fallback URL (needs geometry)
+    let satelliteSrc = null;
     if (feature.geometry) {
       const c = getCentroid(feature.geometry);
       if (c) {
         const [lon, lat] = c;
-        imgHtml = `<img src="https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${lon.toFixed(6)},${lat.toFixed(6)},16/380x160?access_token=${MAPBOX_PUBLIC_TOKEN}" alt="" loading="lazy" class="card-img">`;
+        satelliteSrc = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${lon.toFixed(6)},${lat.toFixed(6)},16/380x160?access_token=${MAPBOX_PUBLIC_TOKEN}`;
       }
     }
 
-    if (addr && isRealStreetAddress(addr)) {
+    // Street View preview URL — only when API key present and address is real
+    const hasAddr = addr && isRealStreetAddress(addr);
+    let streetViewSrc = null;
+    if (hasAddr && GOOGLE_MAPS_KEY) {
+      streetViewSrc = `https://maps.googleapis.com/maps/api/streetview?size=380x160&location=${encodeURIComponent(addr.trim())}&return_error_code=true&key=${GOOGLE_MAPS_KEY}`;
+    }
+
+    // Primary image: Street View if available, else satellite, else placeholder
+    const primarySrc = streetViewSrc || satelliteSrc;
+    let imgHtml;
+    if (primarySrc) {
+      // data-src for lazy loading; data-fallback for Street View → satellite fallback
+      const fallbackAttr = streetViewSrc && satelliteSrc ? ` data-fallback="${satelliteSrc}"` : '';
+      imgHtml = `<img data-src="${primarySrc}"${fallbackAttr} alt="" class="card-img lazy-img">`;
+    } else {
+      imgHtml = `<div class="card-img-placeholder">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/></svg></div>`;
+    }
+
+    // Google Maps link badge / "not available" label
+    let svHtml = `<span class="card-sv-na">Street View not available</span>`;
+    if (hasAddr) {
       const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(addr.trim())}`;
       svHtml = `<a href="${mapsUrl}" target="_blank" rel="noopener" class="card-sv-badge">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -1607,6 +1630,41 @@ function renderParcelListView(features, totalCount) {
     });
     cards.appendChild(card);
   });
+
+  initLazyImages(cards);
+}
+
+// Lazy-load .lazy-img elements inside a container using IntersectionObserver.
+// Images with data-fallback will fall back to that src on load error (e.g. no Street View).
+function initLazyImages(container) {
+  const imgs = container.querySelectorAll('.lazy-img');
+  if (!imgs.length) return;
+
+  if (!('IntersectionObserver' in window)) {
+    // Fallback for old browsers: load everything immediately
+    imgs.forEach(img => { img.src = img.dataset.src; });
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const img = entry.target;
+      obs.unobserve(img);
+      img.onerror = () => {
+        if (img.dataset.fallback) {
+          img.src = img.dataset.fallback;
+          img.removeAttribute('data-fallback');
+        }
+      };
+      img.src = img.dataset.src;
+    });
+  }, {
+    root: container,   // observe within the scrollable panel
+    rootMargin: '120px', // start loading slightly before scrolling into view
+  });
+
+  imgs.forEach(img => observer.observe(img));
 }
 
 function setListViewOpen(open) {
