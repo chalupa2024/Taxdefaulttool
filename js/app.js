@@ -1577,17 +1577,18 @@ async function highlightParcelOnMap(feature) {
     return;
   }
 
-  // ── Tier 2: Cached location from a prior map-tile click ─────────────────────
-  if (ain && _parcelLocationCache.has(ain)) {
-    map.setView(_parcelLocationCache.get(ain), 18);
-    return;
-  }
-
-  // ── Tier 3: Geocode the property address (Nominatim, free, 1 req/s) ─────────
+  // ── Tier 2: Geocode the property address (Nominatim) — always preferred ──────
+  // Do this before checking the cache so addressed parcels always get accurate placement.
   const addrField = guessAddressField(Object.keys(p));
   const addr      = addrField ? p[addrField] : null;
   if (addr && isRealStreetAddress(addr)) {
+    // Check cache first for this specific address to avoid repeat API calls
+    if (ain && _parcelLocationCache.has(ain)) {
+      map.setView(_parcelLocationCache.get(ain), 18);
+      return;
+    }
     try {
+      showToast('Locating parcel…', 5000);
       // Respect Nominatim's 1 req/sec policy
       const wait = 1100 - (Date.now() - _nominatimLastMs);
       if (wait > 0) await new Promise(r => setTimeout(r, wait));
@@ -1603,12 +1604,18 @@ async function highlightParcelOnMap(feature) {
         const data = await res.json();
         if (data && data.length) {
           const latlng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-          if (ain) _parcelLocationCache.set(ain, latlng); // cache for next time
+          if (ain) _parcelLocationCache.set(ain, latlng); // cache so next click is instant
           map.setView(latlng, 18);
           return;
         }
       }
     } catch (e) { console.warn('Parcel geocode failed:', e); }
+  }
+
+  // ── Tier 3: MVT centroid cache (vacant/no-address parcels) ───────────────────
+  if (ain && _parcelLocationCache.has(ain)) {
+    map.setView(_parcelLocationCache.get(ain), 18);
+    return;
   }
 
   // ── No location found ────────────────────────────────────────────────────────
