@@ -832,8 +832,12 @@ let _nominatimLastMs = 0; // timestamp of last Nominatim request (rate-limit gua
 // Monkey-patches a VectorGrid layer's tile loader to extract AIN→centroid mappings
 // from raw MVT geometry as tiles stream in. Silently skips errors.
 function setupParcelLocationIndexing(vectorLayer, county, idField) {
-  if (typeof vectorLayer._getVectorTilePromise !== 'function') return;
+  if (typeof vectorLayer._getVectorTilePromise !== 'function') {
+    console.warn('[ParcelIndex] _getVectorTilePromise not found on vectorLayer');
+    return;
+  }
   const orig = vectorLayer._getVectorTilePromise.bind(vectorLayer);
+  let _indexed = 0;
   vectorLayer._getVectorTilePromise = function(...args) {
     return orig(...args).then(vt => {
       try {
@@ -859,7 +863,11 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
             const lng = (coords.x + fx) / n * 360 - 180;
             const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (coords.y + fy) / n)));
             _parcelLocationCache.set(ain, { lat: latRad * 180 / Math.PI, lng });
+            _indexed++;
           } catch (_) {}
+        }
+        if (_indexed > 0 && _indexed <= 50) {
+          console.log(`[ParcelIndex] cached ${_indexed} parcel centroids so far (tile z${coords.z})`);
         }
       } catch (_) {}
       return vt;
@@ -1071,15 +1079,14 @@ function buildMapboxVectorLayer(county) {
     showParcelModal({ properties: { ...tdProps, ...props } }, 'county');
   });
 
+  // Patch BEFORE addTo so no tiles slip through before the hook is installed
+  setupParcelLocationIndexing(vectorLayer, county, idField);
+
   vectorLayer.addTo(map);
   state.county.layer = vectorLayer;
   state.county.idField = idField;
   state.county.isMapbox = true;
   state.county.catalog = county;
-
-  // Intercept tile loading to auto-build AIN→centroid cache from MVT geometry.
-  // This runs silently as tiles load so every rendered parcel becomes zoomable.
-  setupParcelLocationIndexing(vectorLayer, county, idField);
 }
 
 async function loadCountyFromMapbox(county) {
