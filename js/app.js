@@ -905,9 +905,10 @@ async function loadCountyFromURL(county) {
     const fields = getFields(gj);
     const count  = (gj.features || []).length;
 
-    state.county.geojson = gj;
-    state.county.fields  = fields;
-    state.county.idField = county.apnField && fields.includes(county.apnField)
+    state.county.geojson  = gj;
+    state.county.fields   = fields;
+    state.county.catalog  = county;
+    state.county.idField  = county.apnField && fields.includes(county.apnField)
       ? county.apnField
       : guessIdField(fields);
 
@@ -1008,6 +1009,7 @@ function buildMapboxVectorLayer(county) {
   state.county.layer = vectorLayer;
   state.county.idField = idField;
   state.county.isMapbox = true;
+  state.county.catalog = county;
 }
 
 async function loadCountyFromMapbox(county) {
@@ -1476,30 +1478,59 @@ function guessAddressField(fields) {
 
 // Join tax-default spreadsheet rows with county parcel geometry where available.
 // Zoom to and highlight a parcel selected from the list panel.
-function highlightParcelOnMap(feature) {
+async function highlightParcelOnMap(feature) {
   const p   = feature.properties || {};
   const ain = normalizeId(p[state.taxdefault.idField] || p[state.county.idField] || '');
 
   // Update selected AIN for Mapbox vector tile highlight
   state.selectedAin = ain || null;
-  if (state.county.isMapbox && state.county.layer) {
-    state.county.layer.redraw();
-  }
+  if (state.county.isMapbox && state.county.layer) state.county.layer.redraw();
 
-  // Remove any previous GeoJSON highlight
+  // Remove any previous highlight
   if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
 
   if (feature.geometry) {
-    // Draw a bright pulsing ring around the selected parcel
+    // GeoJSON geometry available — draw outline and fit bounds
     state.highlightLayer = L.geoJSON(feature, {
-      style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2, dashArray: null },
+      style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
       interactive: false,
     }).addTo(map);
+    try { map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (e) {}
+    return;
+  }
 
-    // Zoom to parcel bounds
-    try {
-      map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
-    } catch (e) {}
+  // No geometry (Mapbox tile county) — geocode the property address to get a location
+  const addrField = guessAddressField(Object.keys(p));
+  const addr = addrField ? p[addrField] : null;
+  if (!addr || !isRealStreetAddress(addr)) return;
+
+  try {
+    const countyName = (state.county.catalog && state.county.catalog.name) || '';
+    const query = encodeURIComponent(`${addr.trim()}, ${countyName} County, California, USA`);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !data.length) return;
+
+    const lat = parseFloat(data[0].lat);
+    const lon = parseFloat(data[0].lon);
+    map.setView([lat, lon], 18);
+
+    // Drop a highlight circle at the geocoded location
+    state.highlightLayer = L.circleMarker([lat, lon], {
+      radius: 14,
+      color: '#facc15',
+      weight: 3,
+      fill: true,
+      fillColor: '#facc15',
+      fillOpacity: 0.25,
+      interactive: false,
+    }).addTo(map);
+  } catch (e) {
+    console.warn('Parcel geocode failed:', e);
   }
 }
 
