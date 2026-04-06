@@ -827,6 +827,45 @@ const _countyBoundaryCache = {};
 // Caches parcel centroids (AIN → {lat, lng}) discovered via map tile clicks.
 // Lets list-card clicks zoom to parcels that have been touched on the map.
 const _parcelLocationCache = new Map();
+let _nominatimLastMs = 0; // timestamp of last Nominatim request (rate-limit guard)
+
+// Monkey-patches a VectorGrid layer's tile loader to extract AIN→centroid mappings
+// from raw MVT geometry as tiles stream in. Silently skips errors.
+function setupParcelLocationIndexing(vectorLayer, county, idField) {
+  if (typeof vectorLayer._getVectorTilePromise !== 'function') return;
+  const orig = vectorLayer._getVectorTilePromise.bind(vectorLayer);
+  vectorLayer._getVectorTilePromise = function(...args) {
+    return orig(...args).then(vt => {
+      try {
+        const tileLayer = vt.layers && (vt.layers[county.mapboxLayer] || Object.values(vt.layers)[0]);
+        if (!tileLayer) return vt;
+        const coords = args[0]; // {x, y, z}
+        const n = Math.pow(2, coords.z);
+        for (let i = 0; i < tileLayer.length; i++) {
+          try {
+            const feat = tileLayer.feature(i);
+            const ain  = normalizeId(
+              feat.properties[idField] || feat.properties.AIN || feat.properties.APN || ''
+            );
+            if (!ain || _parcelLocationCache.has(ain)) continue;
+            const geom = feat.loadGeometry(); // array of rings: [{x,y}]
+            if (!geom || !geom.length) continue;
+            let sumX = 0, sumY = 0, cnt = 0;
+            geom.forEach(ring => ring.forEach(pt => { sumX += pt.x; sumY += pt.y; cnt++; }));
+            if (!cnt) continue;
+            const extent = feat.extent || 4096;
+            const fx = sumX / cnt / extent;
+            const fy = sumY / cnt / extent;
+            const lng = (coords.x + fx) / n * 360 - 180;
+            const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * (coords.y + fy) / n)));
+            _parcelLocationCache.set(ain, { lat: latRad * 180 / Math.PI, lng });
+          } catch (_) {}
+        }
+      } catch (_) {}
+      return vt;
+    });
+  };
+}
 
 // Draw county outline and zoom to fit. Accepts the full county catalog object.
 async function loadCountyBoundary(county) {
@@ -1037,6 +1076,10 @@ function buildMapboxVectorLayer(county) {
   state.county.idField = idField;
   state.county.isMapbox = true;
   state.county.catalog = county;
+
+  // Intercept tile loading to auto-build AIN→centroid cache from MVT geometry.
+  // This runs silently as tiles load so every rendered parcel becomes zoomable.
+  setupParcelLocationIndexing(vectorLayer, county, idField);
 }
 
 async function loadCountyFromMapbox(county) {
@@ -1533,11 +1576,16 @@ async function highlightParcelOnMap(feature) {
     return;
   }
 
-  // ── Tier 3: Geocode the property address (Nominatim, free) ──────────────────
+  // ── Tier 3: Geocode the property address (Nominatim, free, 1 req/s) ─────────
   const addrField = guessAddressField(Object.keys(p));
   const addr      = addrField ? p[addrField] : null;
   if (addr && isRealStreetAddress(addr)) {
     try {
+      // Respect Nominatim's 1 req/sec policy
+      const wait = 1100 - (Date.now() - _nominatimLastMs);
+      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      _nominatimLastMs = Date.now();
+
       const countyName = (state.county.catalog && state.county.catalog.name) || '';
       const q = encodeURIComponent(`${addr.trim()}, ${countyName} County, California, USA`);
       const res = await fetch(
