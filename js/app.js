@@ -827,7 +827,6 @@ const _countyBoundaryCache = {};
 // Caches parcel centroids (AIN → {lat, lng}) discovered via map tile clicks.
 // Lets list-card clicks zoom to parcels that have been touched on the map.
 const _parcelLocationCache = new Map();
-let _nominatimLastMs = 0; // timestamp of last Nominatim request (rate-limit guard)
 
 // Monkey-patches a VectorGrid layer's tile loader to extract AIN→centroid mappings
 // from raw MVT geometry as tiles stream in. Silently skips errors.
@@ -848,8 +847,11 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
         for (let i = 0; i < tileLayer.length; i++) {
           try {
             const feat = tileLayer.feature(i);
-            const ain  = normalizeId(
-              feat.properties[idField] || feat.properties.AIN || feat.properties.APN || ''
+            // Try every common APN/AIN field name so tiles with non-standard schemas still cache
+            const fp = feat.properties;
+            const ain = normalizeId(
+              fp[idField] || fp.AIN || fp.APN || fp.apn || fp.ain ||
+              fp.PARCEL_NO || fp.Parcel_Number || fp.parcel || ''
             );
             if (!ain || _parcelLocationCache.has(ain)) continue;
             const geom = feat.loadGeometry(); // array of rings: [{x,y}]
@@ -1548,17 +1550,43 @@ function isRealStreetAddress(addr) {
 }
 
 function guessAddressField(fields) {
-  const candidates = ['situs','situsaddr','siteaddr','siteaddress','address',
-    'fulladdress','addr','streetaddress','propertyaddress'];
-  return fields.find(f => candidates.includes(f.toLowerCase().replace(/[\s_\-]/g,''))) || null;
+  // Exact normalized matches (highest priority)
+  const exact = [
+    'situs','situsaddr','siteaddr','siteaddress','situsaddress',
+    'address','fulladdress','addr','streetaddress',
+    'propertyaddress','propertyaddr','parceladdress',
+    'propertylocation','location','streetaddr',
+    'addressfull','streetaddress1','propaddr','propaddress',
+  ];
+  for (const c of exact) {
+    const f = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c);
+    if (f) return f;
+  }
+  // Partial match: any field whose name contains 'addr', 'situs', or 'location'
+  const partial = fields.find(f => {
+    const l = f.toLowerCase();
+    return l.includes('addr') || l.includes('situs') || l.includes('location');
+  });
+  return partial || null;
 }
 
 // Join tax-default spreadsheet rows with county parcel geometry where available.
 // Zoom to and highlight a parcel selected from the list panel.
 // Three-tier location lookup: geometry → cached map click → address geocode
 async function highlightParcelOnMap(feature) {
-  const p   = feature.properties || {};
-  const ain = normalizeId(p[state.taxdefault.idField] || p[state.county.idField] || '');
+  const p = feature.properties || {};
+
+  // Collect every possible AIN/APN value from the properties to maximize cache hit rate.
+  // Normalizes all of them so format differences (dashes, spaces) don't cause misses.
+  const rawIds = [
+    p[state.taxdefault.idField],
+    p[state.county.idField],
+    p['AIN'], p['APN'], p['apn'], p['ain'],
+    p['Parcel_Number'], p['PARCEL_NO'], p['parcel'],
+  ].map(v => normalizeId(v)).filter(Boolean);
+  // Deduplicate
+  const candidateAins = [...new Set(rawIds)];
+  const ain = candidateAins[0] || '';
 
   // Update selected AIN — Mapbox vector tile layer redraws with yellow highlight
   state.selectedAin = ain || null;
@@ -1567,7 +1595,7 @@ async function highlightParcelOnMap(feature) {
   // Remove any previous GeoJSON highlight overlay
   if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
 
-  // ── Tier 1: GeoJSON geometry (non-Mapbox counties) ──────────────────────────
+  // ── Tier 1: GeoJSON geometry (future upload counties) ───────────────────────
   if (feature.geometry) {
     state.highlightLayer = L.geoJSON(feature, {
       style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
@@ -1577,49 +1605,53 @@ async function highlightParcelOnMap(feature) {
     return;
   }
 
-  // ── Tier 2: Geocode the property address (Nominatim) — always preferred ──────
-  // Do this before checking the cache so addressed parcels always get accurate placement.
+  // ── Tier 2: MVT centroid cache (instant if tile already loaded) ──────────────
+  const cachedLatlng = candidateAins.reduce((hit, id) => hit || _parcelLocationCache.get(id), null);
+  if (cachedLatlng) {
+    map.setView(cachedLatlng, 18);
+    return;
+  }
+
+  // ── Tier 3: Geocode via Mapbox (addressed parcels) ──────────────────────────
+  // Uses the Mapbox token we already have — no rate limits for typical usage.
   const addrField = guessAddressField(Object.keys(p));
   const addr      = addrField ? p[addrField] : null;
   if (addr && isRealStreetAddress(addr)) {
-    // Check cache first for this specific address to avoid repeat API calls
-    if (ain && _parcelLocationCache.has(ain)) {
-      map.setView(_parcelLocationCache.get(ain), 18);
-      return;
-    }
+    showToast('Locating parcel…', 6000);
     try {
-      showToast('Locating parcel…', 5000);
-      // Respect Nominatim's 1 req/sec policy
-      const wait = 1100 - (Date.now() - _nominatimLastMs);
-      if (wait > 0) await new Promise(r => setTimeout(r, wait));
-      _nominatimLastMs = Date.now();
-
-      const countyName = (state.county.catalog && state.county.catalog.name) || '';
-      const q = encodeURIComponent(`${addr.trim()}, ${countyName} County, California, USA`);
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
-        { headers: { 'Accept': 'application/json' } }
-      );
+      const bounds   = state.county.catalog && state.county.catalog.bounds;
+      const proxPart = bounds
+        ? `&proximity=${((bounds[0][1] + bounds[1][1]) / 2).toFixed(4)},${((bounds[0][0] + bounds[1][0]) / 2).toFixed(4)}`
+        : '';
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${
+        encodeURIComponent(addr.trim())
+      }.json?country=us&types=address&limit=1${proxPart}&access_token=${MAPBOX_PUBLIC_TOKEN}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.length) {
-          const latlng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-          if (ain) _parcelLocationCache.set(ain, latlng); // cache so next click is instant
+        if (data.features && data.features.length) {
+          const [lng, lat] = data.features[0].center;
+          const latlng = { lat, lng };
+          candidateAins.forEach(id => _parcelLocationCache.set(id, latlng));
           map.setView(latlng, 18);
           return;
         }
       }
-    } catch (e) { console.warn('Parcel geocode failed:', e); }
+    } catch (e) { console.warn('Mapbox geocode failed:', e); }
   }
 
-  // ── Tier 3: MVT centroid cache (vacant/no-address parcels) ───────────────────
-  if (ain && _parcelLocationCache.has(ain)) {
-    map.setView(_parcelLocationCache.get(ain), 18);
+  // ── Tier 4: Wait for tiles (vacant parcels whose tile may still be loading) ──
+  // Tiles stream in asynchronously — give them up to 2s then retry the cache.
+  showToast('Locating parcel…', 6000);
+  await new Promise(r => setTimeout(r, 2000));
+  const retryLatlng = candidateAins.reduce((hit, id) => hit || _parcelLocationCache.get(id), null);
+  if (retryLatlng) {
+    map.setView(retryLatlng, 18);
     return;
   }
 
-  // ── No location found ────────────────────────────────────────────────────────
-  showToast('No location data — click this parcel on the map to pin it');
+  // ── Nothing worked ───────────────────────────────────────────────────────────
+  showToast('Parcel not located — scroll the map to find it, then click it to pin it');
 }
 
 function buildListViewFeatures() {
