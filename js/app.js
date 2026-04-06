@@ -1447,6 +1447,19 @@ window.showParcelModalById = function(apn) {
 
 // ─── Parcel List View (Zillow-style) ─────────────────────────────────────────
 
+// Returns true only for values that look like a real street address
+// (must start with a house number AND contain letters for the street name).
+// Rejects blanks, "0", "UNKNOWN", pure-number strings, etc.
+function isRealStreetAddress(addr) {
+  const s = String(addr).trim();
+  if (!s || s === '0' || s.length < 5) return false;
+  // Must start with at least one digit (house number)
+  if (!/^\d/.test(s)) return false;
+  // Must contain at least two letters (street name)
+  if ((s.match(/[a-zA-Z]/g) || []).length < 2) return false;
+  return true;
+}
+
 function guessAddressField(fields) {
   const candidates = ['situs','situsaddr','siteaddr','siteaddress','address',
     'fulladdress','addr','streetaddress','propertyaddress'];
@@ -1562,7 +1575,7 @@ function renderParcelListView(features, totalCount) {
       }
     }
 
-    if (addr && addr.trim()) {
+    if (addr && isRealStreetAddress(addr)) {
       const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(addr.trim())}`;
       svHtml = `<a href="${mapsUrl}" target="_blank" rel="noopener" class="card-sv-badge">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
