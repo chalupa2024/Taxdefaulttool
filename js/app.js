@@ -1552,15 +1552,21 @@ function renderParcelListView(features, totalCount) {
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         <polyline points="9 22 9 12 15 12 15 22"/></svg></div>`;
-    let svHref = null;
+    let svHtml = `<span class="card-sv-na">Street View not available</span>`;
 
     if (feature.geometry) {
       const c = getCentroid(feature.geometry);
       if (c) {
         const [lon, lat] = c;
         imgHtml = `<img src="https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${lon.toFixed(6)},${lat.toFixed(6)},16/380x160?access_token=${MAPBOX_PUBLIC_TOKEN}" alt="" loading="lazy" class="card-img">`;
-        svHref  = `https://www.google.com/maps?layer=c&cbll=${lat.toFixed(6)},${lon.toFixed(6)}`;
       }
+    }
+
+    if (addr && addr.trim()) {
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(addr.trim())}`;
+      svHtml = `<a href="${mapsUrl}" target="_blank" rel="noopener" class="card-sv-badge">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        View on Google Maps</a>`;
     }
 
     const card = document.createElement('div');
@@ -1568,9 +1574,7 @@ function renderParcelListView(features, totalCount) {
     card.innerHTML = `
       <div class="card-image-wrap">
         ${imgHtml}
-        ${svHref ? `<a href="${svHref}" target="_blank" rel="noopener" class="card-sv-badge">
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-          Street View</a>` : ''}
+        ${svHtml}
       </div>
       <div class="card-body">
         ${amount ? `<div class="card-price">${formatCurrency(amount)}</div>` : ''}
