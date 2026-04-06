@@ -643,6 +643,7 @@ html, body {
   transition: background 0.12s;
 }
 .parcel-card:hover { background: var(--color-surface); }
+.parcel-card.selected { outline: 2px solid #facc15; outline-offset: -2px; background: var(--color-surface); }
 
 .card-image-wrap {
   position: relative;

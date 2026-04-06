@@ -44,6 +44,8 @@ const state = {
   matched:       [],
   matchedLayer:  null,
   basemapIdx:    0,
+  selectedAin:   null,   // AIN of the currently selected parcel card
+  highlightLayer: null,  // GeoJSON highlight layer for selected parcel
 };
 
 // ─── Mapbox ───────────────────────────────────────────────────────────────────
@@ -974,8 +976,10 @@ function buildMapboxVectorLayer(county) {
     vectorTileLayerStyles: {
       [layerName]: function(properties) {
         const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
-        const isDefault = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
-        if (isDefault) return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.5, color: STYLE_TAXDEFAULT.color, weight: 1.5 };
+        const isSelected = state.selectedAin && ain === state.selectedAin;
+        const isDefault  = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
+        if (isSelected) return { fill: true, fillColor: '#facc15', fillOpacity: 0.55, color: '#facc15', weight: 3 };
+        if (isDefault)  return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.5, color: STYLE_TAXDEFAULT.color, weight: 1.5 };
         return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.08, color: '#4a9eff', weight: 0.4 };
       },
     },
@@ -1471,6 +1475,34 @@ function guessAddressField(fields) {
 }
 
 // Join tax-default spreadsheet rows with county parcel geometry where available.
+// Zoom to and highlight a parcel selected from the list panel.
+function highlightParcelOnMap(feature) {
+  const p   = feature.properties || {};
+  const ain = normalizeId(p[state.taxdefault.idField] || p[state.county.idField] || '');
+
+  // Update selected AIN for Mapbox vector tile highlight
+  state.selectedAin = ain || null;
+  if (state.county.isMapbox && state.county.layer) {
+    state.county.layer.redraw();
+  }
+
+  // Remove any previous GeoJSON highlight
+  if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
+
+  if (feature.geometry) {
+    // Draw a bright pulsing ring around the selected parcel
+    state.highlightLayer = L.geoJSON(feature, {
+      style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2, dashArray: null },
+      interactive: false,
+    }).addTo(map);
+
+    // Zoom to parcel bounds
+    try {
+      map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+    } catch (e) {}
+  }
+}
+
 function buildListViewFeatures() {
   const tdGJ = state.taxdefault.geojson;
   if (!tdGJ || !tdGJ.features || !tdGJ.features.length) return [];
@@ -1622,11 +1654,13 @@ function renderParcelListView(features, totalCount) {
 
     card.addEventListener('click', e => {
       if (e.target.closest('.card-sv-badge')) return;
-      showParcelModal(feature, 'taxdefault');
-      if (feature.geometry) {
-        const c = getCentroid(feature.geometry);
-        if (c) map.setView([c[1], c[0]], 16);
-      }
+
+      // Highlight & zoom on the map
+      highlightParcelOnMap(feature);
+
+      // Visual selection state on cards
+      cards.querySelectorAll('.parcel-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
     });
     cards.appendChild(card);
   });
@@ -1671,8 +1705,15 @@ function setListViewOpen(open) {
   const panel = document.getElementById('parcel-list-panel');
   panel.style.display = open ? 'flex' : 'none';
   setTimeout(() => map.invalidateSize(), 50);
-  if (open) refreshListView();
-  else renderParcelListView([], null); // update button label only
+  if (open) {
+    refreshListView();
+  } else {
+    // Clear selection when panel closes
+    if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
+    state.selectedAin = null;
+    if (state.county.isMapbox && state.county.layer) state.county.layer.redraw();
+    renderParcelListView([], null); // update button label only
+  }
 }
 
 document.getElementById('btn-list-view').addEventListener('click', () => {
