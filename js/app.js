@@ -289,22 +289,35 @@ function guessOwnerField(fields) {
 
 function guessUseTypeField(fields) {
   const candidates = ['usetype', 'use_type', 'usecode', 'use_code', 'propertyuse',
-    'property_use', 'landuse', 'land_use', 'zoning', 'proptype', 'property_type'];
+    'property_use', 'landuse', 'land_use', 'zoning', 'proptype', 'property_type',
+    'generaluse', 'generallanduse', 'usedescription', 'usedesc'];
   for (const c of candidates) {
     const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
     if (match) return match;
   }
-  return '';
+  // Broad fallback: any field containing 'use' or 'type' keywords
+  return fields.find(f => {
+    const l = f.toLowerCase();
+    return l.includes('usetype') || l.includes('use type') ||
+           (l.includes('use') && l.includes('code')) ||
+           l.includes('landuse') || l.includes('land use');
+  }) || '';
 }
 
 function guessYearBuiltField(fields) {
   const candidates = ['yearbuilt1', 'yearbuilt', 'year_built', 'yr_built', 'yrbuilt',
-    'built', 'constructionyear', 'construction_year'];
+    'built', 'constructionyear', 'construction_year', 'yearofconstruction',
+    'buildyear', 'effectiveyear', 'effectiveyearbuilt'];
   for (const c of candidates) {
     const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
     if (match) return match;
   }
-  return '';
+  // Broad fallback: any field containing 'year' and 'built'
+  return fields.find(f => {
+    const l = f.toLowerCase();
+    return l.includes('yearbuilt') || l.includes('year built') ||
+           (l.includes('year') && l.includes('built'));
+  }) || '';
 }
 
 // Returns { field, convFactor } where convFactor converts raw value → acres.
