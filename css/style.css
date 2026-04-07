@@ -713,16 +713,39 @@ html, body {
   padding: 10px 12px;
 }
 
-.card-price {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-primary);
-  margin-bottom: 5px;
+/* Two-column stats row: Min Bid | Acreage */
+.card-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 7px;
 }
+.card-stat {
+  flex: 1;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.card-stat-label {
+  display: block;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.card-stat-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.card-stat-bid { color: var(--color-primary); }
 
 .card-apn {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  color: var(--color-text-muted);
   margin-bottom: 2px;
 }
 

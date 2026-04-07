@@ -1760,10 +1760,16 @@ function renderParcelListView(features, totalCount) {
   const idField    = state.taxdefault.idField || state.ownership.idField;
   const amtField   = state.taxdefault.amountField;
   const ownerField = state.taxdefault.ownerField;
-  const acreField  = state.county.acreField;
-  const acreConv   = state.county.acreConvFactor;
   const sampleP    = (features[0] || {}).properties || {};
   const addrField  = guessAddressField(Object.keys(sampleP));
+
+  // Acreage: prefer county GeoJSON field; fall back to guessing from tax default props
+  let acreField = state.county.acreField;
+  let acreConv  = state.county.acreConvFactor;
+  if (!acreField) {
+    const guess = guessAcreageField(Object.keys(sampleP));
+    if (guess) { acreField = guess.field; acreConv = guess.convFactor; }
+  }
 
   features.forEach(feature => {
     const p      = feature.properties || {};
@@ -1826,11 +1832,13 @@ function renderParcelListView(features, totalCount) {
         ${svHtml}
       </div>
       <div class="card-body">
-        ${amount ? `<div class="card-price">${formatCurrency(amount)}</div>` : ''}
-        <div class="card-apn">${apn || '—'}</div>
+        <div class="card-stats">
+          ${amount ? `<div class="card-stat"><span class="card-stat-label">Min Bid</span><span class="card-stat-value card-stat-bid">${formatCurrency(amount)}</span></div>` : '<div class="card-stat"><span class="card-stat-label">Min Bid</span><span class="card-stat-value">—</span></div>'}
+          ${acres  ? `<div class="card-stat"><span class="card-stat-label">Acreage</span><span class="card-stat-value">${acres} ac</span></div>` : '<div class="card-stat"><span class="card-stat-label">Acreage</span><span class="card-stat-value">—</span></div>'}
+        </div>
+        <div class="card-apn">APN: ${apn || '—'}</div>
         ${addr  ? `<div class="card-meta">${addr}</div>`  : ''}
         ${owner ? `<div class="card-meta">${owner}</div>` : ''}
-        ${acres ? `<div class="card-meta">${acres} ac</div>` : ''}
       </div>`;
 
     card.addEventListener('click', e => {
