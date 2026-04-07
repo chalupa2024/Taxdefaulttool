@@ -34,12 +34,14 @@ const state = {
     fields:     [],
   },
   taxdefault: {
-    geojson:   null,   // tax default list (may be attribute-only)
-    layer:     null,
-    idField:   null,
-    amountField: null,
-    ownerField:  null,
-    fields:    [],
+    geojson:       null,
+    layer:         null,
+    idField:       null,
+    amountField:   null,
+    ownerField:    null,
+    useTypeField:  null,
+    yearBuiltField: null,
+    fields:        [],
   },
   matched:       [],
   matchedLayer:  null,
@@ -1781,11 +1783,11 @@ function renderParcelListView(features, totalCount) {
   const idField    = state.taxdefault.idField || state.ownership.idField;
   const amtField   = state.taxdefault.amountField;
   const ownerField = state.taxdefault.ownerField;
+  const useField   = state.taxdefault.useTypeField;
+  const yrField    = state.taxdefault.yearBuiltField;
   const sampleP    = (features[0] || {}).properties || {};
   const sampleKeys = Object.keys(sampleP);
   const addrField  = guessAddressField(sampleKeys);
-  const useField   = guessUseTypeField(sampleKeys);
-  const yrField    = guessYearBuiltField(sampleKeys);
 
   // Acreage: prefer county GeoJSON field; fall back to guessing from tax default props
   let acreField = state.county.acreField;
@@ -2136,11 +2138,23 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
   const count   = (geojson.features || []).length;
   const hasGeom = (geojson.features || []).some(f => f.geometry);
 
-  state.taxdefault.geojson     = geojson;
-  state.taxdefault.fields      = fields;
-  state.taxdefault.idField     = guessIdField(fields);
-  state.taxdefault.amountField = guessAmountField(fields);
-  state.taxdefault.ownerField  = guessOwnerField(fields);
+  state.taxdefault.geojson        = geojson;
+  state.taxdefault.fields         = fields;
+  state.taxdefault.idField        = guessIdField(fields);
+  state.taxdefault.amountField    = guessAmountField(fields);
+  state.taxdefault.ownerField     = guessOwnerField(fields);
+  state.taxdefault.useTypeField   = guessUseTypeField(fields);
+  state.taxdefault.yearBuiltField = guessYearBuiltField(fields);
+
+  // Debug: log detected fields so we can verify correct detection
+  console.log('[TaxDefault] detected fields:', {
+    id: state.taxdefault.idField,
+    amount: state.taxdefault.amountField,
+    owner: state.taxdefault.ownerField,
+    useType: state.taxdefault.useTypeField,
+    yearBuilt: state.taxdefault.yearBuiltField,
+    allFields: fields,
+  });
 
   // Build AIN lookup set for Mapbox vector tile highlighting
   const idF = state.taxdefault.idField;
@@ -2512,8 +2526,10 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
     if (notice) notice.style.display = 'none';
   });
 
-  state.taxdefault.amountField = null;
-  state.taxdefault.ownerField  = null;
+  state.taxdefault.amountField    = null;
+  state.taxdefault.ownerField     = null;
+  state.taxdefault.useTypeField   = null;
+  state.taxdefault.yearBuiltField = null;
 
   if (state.county.boundaryLayer) { map.removeLayer(state.county.boundaryLayer); state.county.boundaryLayer = null; }
   state.county.isMapbox = false;
