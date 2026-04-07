@@ -266,8 +266,9 @@ function guessIdField(fields) {
 }
 
 function guessAmountField(fields) {
-  const candidates = ['amount', 'amountdue', 'tax_due', 'taxdue', 'total_due', 'totaldue',
-    'balance', 'delinquent', 'delinquentamount', 'defaultamount'];
+  const candidates = ['minbid', 'minimumbid', 'min_bid', 'amount', 'amountdue',
+    'tax_due', 'taxdue', 'total_due', 'totaldue', 'balance',
+    'delinquent', 'delinquentamount', 'defaultamount'];
   for (const c of candidates) {
     const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
     if (match) return match;
@@ -277,6 +278,26 @@ function guessAmountField(fields) {
 
 function guessOwnerField(fields) {
   const candidates = ['owner', 'ownername', 'owner_name', 'grantee', 'taxpayer', 'name'];
+  for (const c of candidates) {
+    const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
+    if (match) return match;
+  }
+  return '';
+}
+
+function guessUseTypeField(fields) {
+  const candidates = ['usetype', 'use_type', 'usecode', 'use_code', 'propertyuse',
+    'property_use', 'landuse', 'land_use', 'zoning', 'proptype', 'property_type'];
+  for (const c of candidates) {
+    const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
+    if (match) return match;
+  }
+  return '';
+}
+
+function guessYearBuiltField(fields) {
+  const candidates = ['yearbuilt1', 'yearbuilt', 'year_built', 'yr_built', 'yrbuilt',
+    'built', 'constructionyear', 'construction_year'];
   for (const c of candidates) {
     const match = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === c.replace(/[\s_\-]/g, ''));
     if (match) return match;
@@ -1761,22 +1782,27 @@ function renderParcelListView(features, totalCount) {
   const amtField   = state.taxdefault.amountField;
   const ownerField = state.taxdefault.ownerField;
   const sampleP    = (features[0] || {}).properties || {};
-  const addrField  = guessAddressField(Object.keys(sampleP));
+  const sampleKeys = Object.keys(sampleP);
+  const addrField  = guessAddressField(sampleKeys);
+  const useField   = guessUseTypeField(sampleKeys);
+  const yrField    = guessYearBuiltField(sampleKeys);
 
   // Acreage: prefer county GeoJSON field; fall back to guessing from tax default props
   let acreField = state.county.acreField;
   let acreConv  = state.county.acreConvFactor;
   if (!acreField) {
-    const guess = guessAcreageField(Object.keys(sampleP));
+    const guess = guessAcreageField(sampleKeys);
     if (guess) { acreField = guess.field; acreConv = guess.convFactor; }
   }
 
   features.forEach(feature => {
     const p      = feature.properties || {};
-    const apn    = idField    ? p[idField]    : null;
-    const amount = amtField   ? p[amtField]   : null;
-    const owner  = ownerField ? p[ownerField] : null;
-    const addr   = addrField  ? p[addrField]  : null;
+    const apn       = idField    ? p[idField]    : null;
+    const amount    = amtField   ? p[amtField]   : null;
+    const owner     = ownerField ? p[ownerField] : null;
+    const addr      = addrField  ? p[addrField]  : null;
+    const useType   = useField   ? p[useField]   : null;
+    const yearBuilt = yrField    ? p[yrField]    : null;
 
     let acres = null;
     if (acreField && p[acreField] != null) {
@@ -1833,8 +1859,24 @@ function renderParcelListView(features, totalCount) {
       </div>
       <div class="card-body">
         <div class="card-stats">
-          ${amount ? `<div class="card-stat"><span class="card-stat-label">Min Bid</span><span class="card-stat-value card-stat-bid">${formatCurrency(amount)}</span></div>` : '<div class="card-stat"><span class="card-stat-label">Min Bid</span><span class="card-stat-value">—</span></div>'}
-          ${acres  ? `<div class="card-stat"><span class="card-stat-label">Acreage</span><span class="card-stat-value">${acres} ac</span></div>` : '<div class="card-stat"><span class="card-stat-label">Acreage</span><span class="card-stat-value">—</span></div>'}
+          <div class="card-stat">
+            <span class="card-stat-label">Min Bid</span>
+            <span class="card-stat-value card-stat-bid">${amount ? formatCurrency(amount) : '—'}</span>
+          </div>
+          <div class="card-stat">
+            <span class="card-stat-label">Acreage</span>
+            <span class="card-stat-value">${acres ? acres + ' ac' : '—'}</span>
+          </div>
+        </div>
+        <div class="card-stats card-stats-secondary">
+          <div class="card-stat">
+            <span class="card-stat-label">Use Type</span>
+            <span class="card-stat-value card-stat-sm">${useType || '—'}</span>
+          </div>
+          <div class="card-stat">
+            <span class="card-stat-label">Year Built</span>
+            <span class="card-stat-value">${yearBuilt || '—'}</span>
+          </div>
         </div>
         <div class="card-apn">APN: ${apn || '—'}</div>
         ${addr  ? `<div class="card-meta">${addr}</div>`  : ''}

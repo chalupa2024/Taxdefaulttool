@@ -741,6 +741,8 @@ html, body {
   color: var(--color-text);
 }
 .card-stat-bid { color: var(--color-primary); }
+.card-stats-secondary { margin-top: 4px; }
+.card-stat-sm { font-size: 11px; font-weight: 600; }
 
 .card-apn {
   font-size: 12px;
