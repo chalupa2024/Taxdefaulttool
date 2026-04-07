@@ -1094,6 +1094,26 @@ function buildMapboxVectorLayer(county) {
     maxZoom: 20,
   });
 
+  // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
+  let _tile404warned = false;
+  vectorLayer.on('tileerror', function(e) {
+    if (_tile404warned) return;
+    const status = e.error && (e.error.status || (e.error.target && e.error.target.status));
+    if (status === 404 || String(e.error).includes('404')) {
+      _tile404warned = true;
+      console.warn(
+        `[Map] Mapbox tileset "${county.mapboxTileset}" returned 404.\n` +
+        'The tileset may have been renamed or deleted in Mapbox Studio.\n' +
+        'Update the mapboxTileset ID in COUNTY_CATALOG to fix this.'
+      );
+      showToast(
+        `Map tiles not found for ${county.name}. ` +
+        'Check the tileset ID in Mapbox Studio (see console for details).',
+        8000
+      );
+    }
+  });
+
   vectorLayer.on('click', function(e) {
     L.DomEvent.stopPropagation(e);
     const props = e.layer.properties || {};
@@ -2180,8 +2200,10 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
   }
 
   populateFieldSelect('taxdefault-id-field', fields, state.taxdefault.idField);
-  populateOptionalFieldSelect('taxdefault-amount-field', fields, state.taxdefault.amountField);
-  populateOptionalFieldSelect('taxdefault-owner-field', fields, state.taxdefault.ownerField);
+  populateOptionalFieldSelect('taxdefault-amount-field',   fields, state.taxdefault.amountField);
+  populateOptionalFieldSelect('taxdefault-owner-field',    fields, state.taxdefault.ownerField);
+  populateOptionalFieldSelect('taxdefault-usetype-field',  fields, state.taxdefault.useTypeField);
+  populateOptionalFieldSelect('taxdefault-yearbuilt-field',fields, state.taxdefault.yearBuiltField);
 
   document.getElementById('taxdefault-field-map').style.display = 'block';
   document.getElementById('drop-taxdefault').classList.add('loaded');
@@ -2364,6 +2386,16 @@ document.getElementById('taxdefault-amount-field').addEventListener('change', e 
 
 document.getElementById('taxdefault-owner-field').addEventListener('change', e => {
   state.taxdefault.ownerField = e.target.value;
+});
+
+document.getElementById('taxdefault-usetype-field').addEventListener('change', e => {
+  state.taxdefault.useTypeField = e.target.value;
+  refreshListView();
+});
+
+document.getElementById('taxdefault-yearbuilt-field').addEventListener('change', e => {
+  state.taxdefault.yearBuiltField = e.target.value;
+  refreshListView();
 });
 
 document.getElementById('conservation-name-field').addEventListener('change', e => {
