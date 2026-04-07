@@ -1238,8 +1238,10 @@ function buildMapboxVectorLayer(county) {
     }
   });
 
-  // After each tile finishes rendering, harvest its feature properties into the cache.
+  // After each tile renders, harvest feature properties into the cache.
   // VectorGrid stores interactive feature layers in this._layers keyed by featureId.
+  // Debounce the list refresh so rapid tile loads only trigger one redraw.
+  let _tileRefreshTimer = null;
   vectorLayer.on('tileload', function() {
     let added = 0;
     try {
@@ -1253,7 +1255,14 @@ function buildMapboxVectorLayer(county) {
         }
       });
     } catch (_) {}
-    if (added > 0) tryDetectTileFields();
+    if (added > 0) {
+      tryDetectTileFields(); // one-time field name detection + initial refresh
+      // Debounced follow-up refresh so later tiles also update the list
+      clearTimeout(_tileRefreshTimer);
+      _tileRefreshTimer = setTimeout(() => {
+        if (state.taxdefault.geojson) refreshListView();
+      }, 400);
+    }
   });
 
   vectorLayer.on('click', function(e) {
