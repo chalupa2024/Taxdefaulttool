@@ -1284,7 +1284,17 @@ function buildMapboxVectorLayer(county) {
       }
     }
 
-    // Merge in tax default spreadsheet data if available
+    // Tax-default parcel: highlight on map + scroll list to its card
+    const isTaxDefault = ain && state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
+    if (isTaxDefault) {
+      state.selectedAin = ain;
+      state.county.layer.redraw();
+      if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
+      scrollToListCard(ain);
+      return;
+    }
+
+    // Non-tax-default parcel: show detail modal as usual
     let tdProps = {};
     if (state.taxdefault.geojson && state.taxdefault.idField) {
       const match = (state.taxdefault.geojson.features || []).find(f =>
@@ -2059,6 +2069,7 @@ function renderParcelListView(features, totalCount) {
 
     const card = document.createElement('div');
     card.className = 'parcel-card';
+    if (apn) card.dataset.ain = normalizeId(apn);
     card.innerHTML = `
       <div class="card-image-wrap">
         ${imgHtml}
@@ -2137,6 +2148,30 @@ function initLazyImages(container) {
   });
 
   imgs.forEach(img => observer.observe(img));
+}
+
+// Open the list panel and scroll/select the card matching the given AIN.
+// Called when the user clicks a tax-default parcel directly on the map.
+function scrollToListCard(ain) {
+  const normAin = normalizeId(ain);
+  const panel   = document.getElementById('parcel-list-panel');
+  const cards   = document.getElementById('parcel-list-cards');
+
+  const doScroll = () => {
+    const card = cards.querySelector(`[data-ain="${normAin}"]`);
+    if (!card) return;
+    cards.querySelectorAll('.parcel-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  if (panel.style.display === 'none') {
+    // Panel is closed — open it (which triggers refreshListView) then scroll
+    setListViewOpen(true);
+    setTimeout(doScroll, 150); // wait for render
+  } else {
+    doScroll();
+  }
 }
 
 function setListViewOpen(open) {
