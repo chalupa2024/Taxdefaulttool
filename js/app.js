@@ -331,8 +331,8 @@ function guessAcreageField(fields) {
     const f = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === name.replace(/[\s_\-]/g, ''));
     if (f) return { field: f, convFactor: 1 };
   }
-  // Shape_Area — typically sq ft in US-projected data; 1 acre = 43,560 sq ft
-  const sqftNames = ['shape_area', 'shapearea', 'shape__area', 'area'];
+  // Shape_Area and similar — typically sq ft in US-projected data; 1 acre = 43,560 sq ft
+  const sqftNames = ['starea', 'shape_area', 'shapearea', 'shape__area', 'area', 'sqft', 'squarefeet'];
   for (const name of sqftNames) {
     const f = fields.find(f => f.toLowerCase().replace(/[\s_\-]/g, '') === name.replace(/[\s_\-]/g, ''));
     if (f) return { field: f, convFactor: 1 / 43560 };
@@ -1238,6 +1238,24 @@ function buildMapboxVectorLayer(county) {
     }
   });
 
+  // After each tile finishes rendering, harvest its feature properties into the cache.
+  // VectorGrid stores interactive feature layers in this._layers keyed by featureId.
+  vectorLayer.on('tileload', function() {
+    let added = 0;
+    try {
+      Object.values(this._layers || {}).forEach(layer => {
+        const props = layer.properties;
+        if (!props) return;
+        const ain = normalizeId(props[idField] || props.AIN || props.APN || '');
+        if (ain && !_parcelPropsCache.has(ain)) {
+          _parcelPropsCache.set(ain, { ...props });
+          added++;
+        }
+      });
+    } catch (_) {}
+    if (added > 0) tryDetectTileFields();
+  });
+
   vectorLayer.on('click', function(e) {
     L.DomEvent.stopPropagation(e);
     const props = e.layer.properties || {};
@@ -1249,6 +1267,11 @@ function buildMapboxVectorLayer(county) {
         _parcelLocationCache.set(ain, e.layer.getBounds().getCenter());
       } catch (_) {
         _parcelLocationCache.set(ain, e.latlng);
+      }
+      // Also cache tile properties so this parcel shows data in the list immediately
+      if (!_parcelPropsCache.has(ain)) {
+        _parcelPropsCache.set(ain, { ...props });
+        tryDetectTileFields();
       }
     }
 
