@@ -8,14 +8,16 @@
 
 const state = {
   county: {
-    geojson:       null,   // full county parcel fabric — geometry source
-    layer:         null,
-    boundaryLayer: null,   // Census TIGER county outline
-    idField:       null,
-    fields:        [],
-    isMapbox:      false,
-    acreField:     null,   // detected acreage field name
-    acreConvFactor: 1,     // multiply raw value by this to get acres
+    geojson:          null,   // full county parcel fabric — geometry source
+    layer:            null,
+    boundaryLayer:    null,   // Census TIGER county outline
+    idField:          null,
+    fields:           [],
+    isMapbox:         false,
+    acreField:        null,   // detected acreage field name
+    acreConvFactor:   1,      // multiply raw value by this to get acres
+    tileUseTypeField: null,   // UseType field detected from MVT tile attributes
+    tileYearBuiltField: null, // YearBuilt field detected from MVT tile attributes
   },
   filters: {
     maxBid:   null,   // show parcels with bid <= this (null = no filter)
@@ -577,6 +579,12 @@ function addCountyLayer(geojson) {
     map.removeLayer(state.county.layer);
     state.county.layer = null;
   }
+  // Clear tile caches from any previous Mapbox county
+  _parcelPropsCache.clear();
+  _parcelLocationCache.clear();
+  _tileFieldsDetected = false;
+  state.county.tileUseTypeField   = null;
+  state.county.tileYearBuiltField = null;
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (!validFeatures.length) return;
 
@@ -866,6 +874,54 @@ const _countyBoundaryCache = {};
 // Lets list-card clicks zoom to parcels that have been touched on the map.
 const _parcelLocationCache = new Map();
 
+// Caches full parcel attribute properties (AIN → props object) from MVT tiles.
+// Used to enrich list cards with UseType, YearBuilt, Acreage, etc. that aren't
+// in the tax-default spreadsheet but are embedded in the tileset.
+const _parcelPropsCache = new Map();
+let _tileFieldsDetected = false;
+
+// Called once enough tile props are cached. Detects UseType / YearBuilt / Acreage
+// field names from tile attributes, stores them in state.county, then refreshes the
+// list view so cards immediately show the enriched data.
+function tryDetectTileFields() {
+  if (_tileFieldsDetected || _parcelPropsCache.size < 5) return;
+  _tileFieldsDetected = true;
+
+  // Collect field names from the first ≤20 cached parcels
+  const sampleKeys = new Set();
+  let n = 0;
+  for (const props of _parcelPropsCache.values()) {
+    Object.keys(props).forEach(k => sampleKeys.add(k));
+    if (++n >= 20) break;
+  }
+  const tileFields = Array.from(sampleKeys);
+
+  if (!state.county.tileUseTypeField) {
+    state.county.tileUseTypeField = guessUseTypeField(tileFields);
+  }
+  if (!state.county.tileYearBuiltField) {
+    state.county.tileYearBuiltField = guessYearBuiltField(tileFields);
+  }
+  // Only use tile acreage if the county GeoJSON field was never detected
+  if (!state.county.acreField) {
+    const guess = guessAcreageField(tileFields);
+    if (guess) {
+      state.county.acreField      = guess.field;
+      state.county.acreConvFactor = guess.convFactor;
+    }
+  }
+
+  console.log('[TileFields] detected from tile attributes:', {
+    useType:   state.county.tileUseTypeField,
+    yearBuilt: state.county.tileYearBuiltField,
+    acreField: state.county.acreField,
+    sampleKeys: tileFields,
+  });
+
+  // Refresh list cards to display the newly-detected tile fields
+  if (state.taxdefault.geojson) refreshListView();
+}
+
 // Monkey-patches a VectorGrid layer's tile loader to extract AIN→centroid mappings
 // from raw MVT geometry as tiles stream in. Silently skips errors.
 function setupParcelLocationIndexing(vectorLayer, county, idField) {
@@ -891,7 +947,12 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
               fp[idField] || fp.AIN || fp.APN || fp.apn || fp.ain ||
               fp.PARCEL_NO || fp.Parcel_Number || fp.parcel || ''
             );
-            if (!ain || _parcelLocationCache.has(ain)) continue;
+            if (!ain) continue;
+            // Always cache the full tile properties (overwrite with fresher data is fine)
+            if (!_parcelPropsCache.has(ain)) {
+              _parcelPropsCache.set(ain, { ...fp });
+            }
+            if (_parcelLocationCache.has(ain)) continue;
             const geom = feat.loadGeometry(); // array of rings: [{x,y}]
             if (!geom || !geom.length) continue;
             let sumX = 0, sumY = 0, cnt = 0;
@@ -909,6 +970,8 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
         if (_indexed > 0 && _indexed <= 50) {
           console.log(`[ParcelIndex] cached ${_indexed} parcel centroids so far (tile z${coords.z})`);
         }
+        // Try to detect UseType/YearBuilt/Acreage field names from tile attributes
+        tryDetectTileFields();
       } catch (_) {}
       return vt;
     });
@@ -1072,6 +1135,13 @@ async function loadCountyFromURL(county) {
 
 function buildMapboxVectorLayer(county) {
   if (state.county.layer) { map.removeLayer(state.county.layer); state.county.layer = null; }
+
+  // Clear stale caches from any previously-loaded county
+  _parcelPropsCache.clear();
+  _parcelLocationCache.clear();
+  _tileFieldsDetected = false;
+  state.county.tileUseTypeField  = null;
+  state.county.tileYearBuiltField = null;
 
   const tileUrl = `https://api.mapbox.com/v4/${county.mapboxTileset}/{z}/{x}/{y}.mvt?access_token=${MAPBOX_PUBLIC_TOKEN}`;
   const layerName = county.mapboxLayer;
@@ -1816,13 +1886,14 @@ function renderParcelListView(features, totalCount) {
   const idField    = state.taxdefault.idField || state.ownership.idField;
   const amtField   = state.taxdefault.amountField;
   const ownerField = state.taxdefault.ownerField;
-  const useField   = state.taxdefault.useTypeField;
-  const yrField    = state.taxdefault.yearBuiltField;
+  // UseType / YearBuilt: prefer explicit user selection, fall back to tile-detected fields
+  const useField   = state.taxdefault.useTypeField   || state.county.tileUseTypeField   || '';
+  const yrField    = state.taxdefault.yearBuiltField || state.county.tileYearBuiltField || '';
   const sampleP    = (features[0] || {}).properties || {};
   const sampleKeys = Object.keys(sampleP);
   const addrField  = guessAddressField(sampleKeys);
 
-  // Acreage: prefer county GeoJSON field; fall back to guessing from tax default props
+  // Acreage: prefer county GeoJSON field → tile-detected field → guess from spreadsheet props
   let acreField = state.county.acreField;
   let acreConv  = state.county.acreConvFactor;
   if (!acreField) {
@@ -1831,26 +1902,41 @@ function renderParcelListView(features, totalCount) {
   }
 
   features.forEach(feature => {
-    const p      = feature.properties || {};
-    const apn       = idField    ? p[idField]    : null;
-    const amount    = amtField   ? p[amtField]   : null;
-    const owner     = ownerField ? p[ownerField] : null;
-    const addr      = addrField  ? p[addrField]  : null;
-    const useType   = useField   ? p[useField]   : null;
-    const yearBuilt = yrField    ? p[yrField]    : null;
+    const p = feature.properties || {};
+    const apn = idField ? p[idField] : null;
+
+    // Merge in Mapbox tile attributes (if this is a Mapbox county and tile has been seen)
+    // Tile props are the "background" — spreadsheet props win for fields they share.
+    const tileProps = state.county.isMapbox && apn
+      ? (_parcelPropsCache.get(normalizeId(apn)) || {})
+      : {};
+    const merged = Object.keys(tileProps).length ? { ...tileProps, ...p } : p;
+
+    const amount    = amtField   ? merged[amtField]   : null;
+    const owner     = ownerField ? merged[ownerField] : null;
+    const addr      = addrField  ? merged[addrField]  : null;
+    const useType   = useField   ? merged[useField]   : null;
+    const yearBuilt = yrField    ? merged[yrField]    : null;
 
     let acres = null;
-    if (acreField && p[acreField] != null) {
-      const raw = parseFloat(p[acreField]);
+    if (acreField && merged[acreField] != null) {
+      const raw = parseFloat(merged[acreField]);
       if (!isNaN(raw)) acres = (raw * acreConv).toFixed(1);
     }
 
-    // Determine satellite fallback URL (needs geometry)
+    // Determine satellite fallback URL — use geometry centroid, or tile centroid cache
     let satelliteSrc = null;
-    if (feature.geometry) {
-      const c = getCentroid(feature.geometry);
-      if (c) {
-        const [lon, lat] = c;
+    {
+      let lon = null, lat = null;
+      if (feature.geometry) {
+        const c = getCentroid(feature.geometry);
+        if (c) { lon = c[0]; lat = c[1]; }
+      }
+      if (lon == null && apn) {
+        const cached = _parcelLocationCache.get(normalizeId(apn));
+        if (cached) { lon = cached.lng; lat = cached.lat; }
+      }
+      if (lon != null && lat != null) {
         satelliteSrc = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${lon.toFixed(6)},${lat.toFixed(6)},16/380x160?access_token=${MAPBOX_PUBLIC_TOKEN}`;
       }
     }
