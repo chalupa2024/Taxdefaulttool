@@ -135,10 +135,10 @@ setBasemap(0);
 
 const STYLE_COUNTY = {
   color: '#64748b',
-  weight: 0.6,
-  opacity: 0.6,
+  weight: 0.3,
+  opacity: 0.5,
   fillColor: '#334155',
-  fillOpacity: 0.06,
+  fillOpacity: 0.04,
 };
 
 const STYLE_CONSERVATION = {
@@ -1207,9 +1207,9 @@ function buildMapboxVectorLayer(county) {
         const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
         const isSelected = state.selectedAin && ain === state.selectedAin;
         const isDefault  = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
-        if (isSelected) return { fill: true, fillColor: '#facc15', fillOpacity: 0.55, color: '#facc15', weight: 3 };
-        if (isDefault)  return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.5, color: STYLE_TAXDEFAULT.color, weight: 1.5 };
-        return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.08, color: '#4a9eff', weight: 0.4 };
+        if (isSelected) return { fill: true, fillColor: '#facc15', fillOpacity: 0.55, color: '#facc15', weight: 2 };
+        if (isDefault)  return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.4, color: STYLE_TAXDEFAULT.color, weight: 0.8 };
+        return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.05, color: '#4a9eff', weight: 0.2 };
       },
     },
     interactive: true,
