@@ -922,6 +922,60 @@ function tryDetectTileFields() {
   if (state.taxdefault.geojson) refreshListView();
 }
 
+// Batch-fetches parcel attributes (UseType, YearBuilt, Acreage, etc.) from the
+// county's ArcGIS REST service for all tax-default AINs in one shot.
+// Results are stored in _parcelPropsCache so the list view populates immediately
+// without waiting for Mapbox tiles to load.
+async function prefetchArcGISAttributes(catalog, rawAins) {
+  const arcgisUrl = catalog && catalog.arcgisUrl;
+  if (!arcgisUrl || !rawAins.length) return;
+
+  const apnField = catalog.apnField || 'AIN';
+  const BATCH = 150; // keep URLs well under server limits
+
+  console.log(`[ArcGIS] Prefetching attributes for ${rawAins.length} parcels from ${arcgisUrl}…`);
+
+  let fetched = 0;
+  for (let i = 0; i < rawAins.length; i += BATCH) {
+    const batch = rawAins.slice(i, i + BATCH);
+    // Try the raw AIN values as they appear in the spreadsheet (hyphens preserved)
+    const inList = batch.map(a => `'${a.replace(/'/g, "''")}'`).join(',');
+    const where   = encodeURIComponent(`${apnField} IN (${inList})`);
+    const url = `${arcgisUrl}/query?where=${where}&outFields=*&returnGeometry=false&f=json`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn(`[ArcGIS] prefetch batch ${Math.floor(i/BATCH)+1} failed (HTTP ${res.status})`);
+        continue;
+      }
+      const data = await res.json();
+      if (data.error) {
+        console.warn('[ArcGIS] prefetch query error:', data.error.message || data.error);
+        break; // endpoint likely doesn't support this query — no point retrying
+      }
+      for (const feat of (data.features || [])) {
+        const attrs = feat.attributes || {};
+        // Normalize both the returned APN and store under it
+        const rawVal = attrs[apnField] || attrs.AIN || attrs.APN || '';
+        const normKey = normalizeId(rawVal);
+        if (normKey) {
+          // Merge: any existing tile data wins for fields already present
+          _parcelPropsCache.set(normKey, { ...attrs, ...(_parcelPropsCache.get(normKey) || {}) });
+          fetched++;
+        }
+      }
+    } catch (e) {
+      console.warn('[ArcGIS] prefetch batch error:', e.message);
+      break;
+    }
+    // Small breathing room between batches
+    if (i + BATCH < rawAins.length) await new Promise(r => setTimeout(r, 150));
+  }
+
+  console.log(`[ArcGIS] Prefetched attributes for ${fetched} parcels`);
+  if (fetched > 0) tryDetectTileFields();
+}
+
 // Monkey-patches a VectorGrid layer's tile loader to extract AIN→centroid mappings
 // from raw MVT geometry as tiles stream in. Silently skips errors.
 function setupParcelLocationIndexing(vectorLayer, county, idField) {
@@ -2304,6 +2358,15 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
 
   // Populate list view automatically (also shows the List button)
   refreshListView();
+
+  // For Mapbox counties: kick off a background ArcGIS attribute fetch so the list
+  // cards get UseType / YearBuilt / Acreage without waiting for tiles to load.
+  if (state.county.isMapbox && state.county.catalog && state.county.catalog.arcgisUrl && idF) {
+    const rawAins = (geojson.features || [])
+      .map(f => String((f.properties || {})[idF] || '').trim())
+      .filter(Boolean);
+    if (rawAins.length) prefetchArcGISAttributes(state.county.catalog, rawAins);
+  }
 }
 
 async function handleLayerLoad(file, layerType) {
