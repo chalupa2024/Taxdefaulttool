@@ -83,10 +83,12 @@ const COUNTY_CATALOG = {
   california: [
     { id: 'riverside',       name: 'Riverside',       apnField: 'APN', bounds: [[33.43, -117.67], [34.08, -114.42]], url: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/riverside-county-california-parcels.zip', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Rivco%20Tax%20Defaults%202.26.xlsx' },
     { id: 'san-bernardino',  name: 'San Bernardino',  apnField: 'APN', bounds: [[34.67, -117.67], [35.81, -114.43]], url: '', taxDefaultUrl: '' },
-    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', bounds: [[33.70, -118.95], [34.82, -117.65]], url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx' },
+    { id: 'los-angeles',     name: 'Los Angeles',     apnField: 'AIN', bounds: [[33.70, -118.95], [34.82, -117.65]], url: '', mapboxTileset: 'tommytex.la-county-parcels', mapboxLayer: 'la_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/LA%20county/la_county_tax_defaults.xlsx',
+      arcgisUrl: 'https://cache.gis.lacounty.gov/cache/rest/services/LACounty_Cache/LACounty_Parcel/MapServer/0' },
     { id: 'orange',          name: 'Orange',          apnField: 'APN', bounds: [[33.38, -118.12], [33.95, -117.41]], url: '', taxDefaultUrl: '' },
     { id: 'san-diego',       name: 'San Diego',       apnField: 'APN', bounds: [[32.53, -117.60], [33.51, -116.08]], url: '', taxDefaultUrl: '' },
-    { id: 'kern',            name: 'Kern',            apnField: 'APN', bounds: [[34.74, -120.06], [36.10, -117.63]], url: '', mapboxTileset: 'tommytex.kern-county-parcels', mapboxLayer: 'kern_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv' },
+    { id: 'kern',            name: 'Kern',            apnField: 'APN', bounds: [[34.74, -120.06], [36.10, -117.63]], url: '', mapboxTileset: 'tommytex.kern-county-parcels', mapboxLayer: 'kern_parcels', taxDefaultUrl: 'https://pub-a97e6aa60e6246d5b40705269ad4ac3d.r2.dev/Kern%20county/Kern_Tax_Defaults_Cleaned%20(1).csv',
+      arcgisUrl: 'https://gis.kerncounty.com/arcgis/rest/services/Assessor/MapServer/0' },
     { id: 'fresno',          name: 'Fresno',          apnField: 'APN', bounds: [[35.79, -120.53], [37.57, -118.36]], url: '', taxDefaultUrl: '' },
     { id: 'tulare',          name: 'Tulare',          apnField: 'APN', bounds: [[35.79, -119.57], [36.74, -118.20]], url: '', taxDefaultUrl: '' },
     { id: 'sacramento',      name: 'Sacramento',      apnField: 'APN', bounds: [[38.02, -121.86], [38.73, -120.91]], url: '', taxDefaultUrl: '' },
@@ -1640,14 +1642,42 @@ async function highlightParcelOnMap(feature) {
     } catch (e) { console.warn('Mapbox geocode failed:', e); }
   }
 
-  // ── Tier 4: Wait for tiles (vacant parcels whose tile may still be loading) ──
-  // Tiles stream in asynchronously — give them up to 2s then retry the cache.
-  showToast('Locating parcel…', 6000);
-  await new Promise(r => setTimeout(r, 2000));
-  const retryLatlng = candidateAins.reduce((hit, id) => hit || _parcelLocationCache.get(id), null);
-  if (retryLatlng) {
-    map.setView(retryLatlng, 18);
-    return;
+  // ── Tier 4: ArcGIS REST lookup by APN (vacant parcels) ──────────────────────
+  // Queries the county's public ArcGIS parcel endpoint to get actual polygon geometry.
+  const catalog   = state.county.catalog || {};
+  const arcgisUrl = catalog.arcgisUrl;
+  const apnField  = catalog.apnField || state.county.idField || 'APN';
+  if (arcgisUrl && ain) {
+    showToast('Locating parcel…', 8000);
+    try {
+      // Try the raw normalized AIN first, then with the original formatting
+      const rawAin = p[state.taxdefault.idField] || p[state.county.idField] || ain;
+      const variants = [...new Set([ain, String(rawAin).trim()])];
+      for (const tryAin of variants) {
+        const where = encodeURIComponent(`${apnField}='${tryAin}'`);
+        const url   = `${arcgisUrl}/query?where=${where}&outFields=${apnField}&returnGeometry=true&geometryPrecision=6&outSR=4326&f=geojson`;
+        const res   = await fetch(url);
+        if (!res.ok) continue;
+        const gj = await res.json();
+        if (gj.features && gj.features.length && gj.features[0].geometry) {
+          const feat = gj.features[0];
+          // Cache centroid for future instant lookups
+          const c = getCentroid(feat.geometry);
+          if (c) {
+            const latlng = { lat: c[1], lng: c[0] };
+            candidateAins.forEach(id => _parcelLocationCache.set(id, latlng));
+          }
+          // Draw yellow highlight polygon and zoom — same UX as addressed parcels
+          if (state.highlightLayer) { map.removeLayer(state.highlightLayer); }
+          state.highlightLayer = L.geoJSON(feat, {
+            style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
+            interactive: false,
+          }).addTo(map);
+          try { map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_) {}
+          return;
+        }
+      }
+    } catch (e) { console.warn('ArcGIS parcel lookup failed:', e); }
   }
 
   // ── Nothing worked ───────────────────────────────────────────────────────────
