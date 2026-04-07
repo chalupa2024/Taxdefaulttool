@@ -1284,17 +1284,7 @@ function buildMapboxVectorLayer(county) {
       }
     }
 
-    // Tax-default parcel: highlight on map + scroll list to its card
-    const isTaxDefault = ain && state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
-    if (isTaxDefault) {
-      state.selectedAin = ain;
-      state.county.layer.redraw();
-      if (state.highlightLayer) { map.removeLayer(state.highlightLayer); state.highlightLayer = null; }
-      scrollToListCard(ain);
-      return;
-    }
-
-    // Non-tax-default parcel: show detail modal as usual
+    // Merge in tax default spreadsheet data if available
     let tdProps = {};
     if (state.taxdefault.geojson && state.taxdefault.idField) {
       const match = (state.taxdefault.geojson.features || []).find(f =>
@@ -1303,6 +1293,10 @@ function buildMapboxVectorLayer(county) {
       if (match) tdProps = match.properties || {};
     }
     showParcelModal({ properties: { ...tdProps, ...props } }, 'county');
+
+    // Also scroll the list to this card if it's a tax-default parcel
+    const isTaxDefault = ain && state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
+    if (isTaxDefault) scrollToListCard(ain);
   });
 
   // Patch BEFORE addTo so no tiles slip through before the hook is installed
