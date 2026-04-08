@@ -26,7 +26,10 @@ const state = {
     useType:      '',     // list panel: exact use type match ('' = all)
     minYearBuilt: null,   // list panel: year built >= this
     maxYearBuilt: null,   // list panel: year built <= this
+    starsOnly:    false,  // show only starred/saved parcels
+    drawnBounds:  null,   // L.LatLngBounds from draw-filter rectangle
   },
+  sort: 'default',        // sort key: 'default' | 'bid-asc' | 'bid-desc' | 'acres-asc' | 'acres-desc' | 'year-asc' | 'year-desc'
   ownership: {
     geojson:   null,   // user's ownership data (may be attribute-only)
     layer:     null,
@@ -710,10 +713,8 @@ function addTaxDefaultLayer(geojson) {
     map.removeLayer(state.taxdefault.layer);
     state.taxdefault.layer = null;
   }
-  if (_priceBubbleLayer) {
-    map.removeLayer(_priceBubbleLayer);
-    _priceBubbleLayer = null;
-  }
+  if (_priceBubbleLayer) { map.removeLayer(_priceBubbleLayer); _priceBubbleLayer = null; }
+  if (_dotLayer)         { map.removeLayer(_dotLayer);         _dotLayer = null; }
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (validFeatures.length === 0) {
     // Try county first, then ownership as fallback
@@ -733,6 +734,7 @@ function addTaxDefaultLayer(geojson) {
   layer.addTo(map);
   state.taxdefault.layer = layer;
   buildPriceBubbles();
+  buildClusterDots();
 }
 
 // Fallback: build tax default preview from ownership geometry when no county loaded.
@@ -785,6 +787,7 @@ function buildTaxDefaultPreviewFromOwnership() {
   layer.addTo(map);
   state.taxdefault.layer = layer;
   buildPriceBubbles();
+  buildClusterDots();
 }
 
 function addMatchedLayer(matchedFeatures) {
@@ -885,7 +888,26 @@ const _countyBoundaryCache = {};
 // Lets list-card clicks zoom to parcels that have been touched on the map.
 const _parcelLocationCache = new Map();
 let _priceBubbleLayer = null;          // Zillow-style price bubble markers
-const BUBBLE_MIN_ZOOM = 12;            // Only render bubbles at this zoom or higher
+let _dotLayer = null;                  // Low-zoom cluster dots
+const BUBBLE_MIN_ZOOM = 12;            // Price bubbles at this zoom and above
+const DOT_MIN_ZOOM    = 8;             // Simple dots from here up to BUBBLE_MIN_ZOOM
+
+// ── Starred parcels — persisted in localStorage ───────────────────────────
+const _starredAins = new Set();
+(function loadStars() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('taxdefault-stars') || '[]');
+    saved.forEach(a => _starredAins.add(a));
+  } catch (_) {}
+})();
+function saveStars() {
+  try { localStorage.setItem('taxdefault-stars', JSON.stringify([..._starredAins])); } catch (_) {}
+}
+
+// ── Draw-filter state ─────────────────────────────────────────────────────
+let _drawActive   = false;
+let _drawStart    = null;
+let _drawRectLayer = null;
 
 // Caches full parcel attribute properties (AIN → props object) from MVT tiles.
 // Used to enrich list cards with UseType, YearBuilt, Acreage, etc. that aren't
@@ -1807,6 +1829,21 @@ function guessAddressField(fields) {
 // Join tax-default spreadsheet rows with county parcel geometry where available.
 // Zoom to and highlight a parcel selected from the list panel.
 // Three-tier location lookup: geometry → cached map click → address geocode
+// Add a brief pulsing ring animation at a map location to draw the eye.
+function addPulseMarker(latlng) {
+  const m = L.marker([latlng.lat ?? latlng[0], latlng.lng ?? latlng[1]], {
+    icon: L.divIcon({
+      className: 'parcel-pulse-wrapper',
+      html: '<div class="parcel-pulse"></div><div class="parcel-pulse ring2"></div><div class="parcel-pulse ring3"></div>',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    }),
+    interactive: false,
+    zIndexOffset: 2000,
+  }).addTo(map);
+  setTimeout(() => { try { map.removeLayer(m); } catch (_) {} }, 2200);
+}
+
 async function highlightParcelOnMap(feature) {
   const p = feature.properties || {};
 
@@ -1835,14 +1872,18 @@ async function highlightParcelOnMap(feature) {
       style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
       interactive: false,
     }).addTo(map);
-    try { map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (e) {}
+    try {
+      map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+      addPulseMarker(state.highlightLayer.getBounds().getCenter());
+    } catch (e) {}
     return;
   }
 
   // ── Tier 2: MVT centroid cache (instant if tile already loaded) ──────────────
   const cachedLatlng = candidateAins.reduce((hit, id) => hit || _parcelLocationCache.get(id), null);
   if (cachedLatlng) {
-    map.setView(cachedLatlng, 18);
+    map.setView(cachedLatlng, Math.max(map.getZoom(), 16));
+    addPulseMarker(cachedLatlng);
     return;
   }
 
@@ -1868,6 +1909,7 @@ async function highlightParcelOnMap(feature) {
           const latlng = { lat, lng };
           candidateAins.forEach(id => _parcelLocationCache.set(id, latlng));
           map.setView(latlng, 18);
+          addPulseMarker(latlng);
           return;
         }
       }
@@ -1905,7 +1947,10 @@ async function highlightParcelOnMap(feature) {
             style: { color: '#facc15', weight: 4, opacity: 1, fill: true, fillColor: '#facc15', fillOpacity: 0.2 },
             interactive: false,
           }).addTo(map);
-          try { map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_) {}
+          try {
+            map.fitBounds(state.highlightLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+            addPulseMarker(state.highlightLayer.getBounds().getCenter());
+          } catch (_) {}
           return;
         }
       }
@@ -1982,6 +2027,19 @@ function applyListFilters(features) {
       const v = parseInt(m[yrField]);
       if (!isNaN(v) && v > state.filters.maxYearBuilt) return false;
     }
+    // Stars filter
+    if (state.filters.starsOnly) {
+      if (!ain || !_starredAins.has(ain)) return false;
+    }
+    // Draw-bounds filter — parcel centroid must be inside drawn rectangle
+    if (state.filters.drawnBounds) {
+      let latlng = null;
+      if (f.geometry) {
+        try { latlng = L.geoJSON(f).getBounds().getCenter(); } catch (_) {}
+      }
+      if (!latlng && ain) { const c = _parcelLocationCache.get(ain); if (c) latlng = c; }
+      if (latlng && !state.filters.drawnBounds.contains(latlng)) return false;
+    }
     return true;
   });
 }
@@ -2015,11 +2073,58 @@ function populateUseTypeFilter() {
   });
 }
 
+// Sort an array of features by the current state.sort key.
+function applySort(features) {
+  const sort = state.sort || 'default';
+  if (sort === 'default') return features;
+  const af   = state.taxdefault.amountField;
+  const acreF = state.county.acreField;
+  const acreC = state.county.acreConvFactor || 1;
+  const yrF  = state.taxdefault.yearBuiltField || state.county.tileYearBuiltField || '';
+  const idF  = state.taxdefault.idField;
+
+  return [...features].sort((a, b) => {
+    const pa = a.properties || {}, pb = b.properties || {};
+    const ainA = idF ? normalizeId(pa[idF]) : '';
+    const ainB = idF ? normalizeId(pb[idF]) : '';
+    const tpA  = (ainA && _parcelPropsCache.get(ainA)) || {};
+    const tpB  = (ainB && _parcelPropsCache.get(ainB)) || {};
+    const ma   = Object.keys(tpA).length ? { ...tpA, ...pa } : pa;
+    const mb   = Object.keys(tpB).length ? { ...tpB, ...pb } : pb;
+
+    if (sort === 'bid-asc' || sort === 'bid-desc') {
+      const va = af ? parseFloat(String(ma[af]||'').replace(/[^\d.]/g,'')) : NaN;
+      const vb = af ? parseFloat(String(mb[af]||'').replace(/[^\d.]/g,'')) : NaN;
+      const a_ = isNaN(va) ? Infinity : va;
+      const b_ = isNaN(vb) ? Infinity : vb;
+      return sort === 'bid-asc' ? a_ - b_ : b_ - a_;
+    }
+    if (sort === 'acres-asc' || sort === 'acres-desc') {
+      const va = acreF ? parseFloat(ma[acreF]) * acreC : NaN;
+      const vb = acreF ? parseFloat(mb[acreF]) * acreC : NaN;
+      const a_ = isNaN(va) ? Infinity : va;
+      const b_ = isNaN(vb) ? Infinity : vb;
+      return sort === 'acres-asc' ? a_ - b_ : b_ - a_;
+    }
+    if (sort === 'year-asc' || sort === 'year-desc') {
+      const va = yrF ? parseInt(ma[yrF]) : NaN;
+      const vb = yrF ? parseInt(mb[yrF]) : NaN;
+      const nullVal = sort === 'year-asc' ? Infinity : -Infinity;
+      const a_ = isNaN(va) ? nullVal : va;
+      const b_ = isNaN(vb) ? nullVal : vb;
+      return sort === 'year-asc' ? a_ - b_ : b_ - a_;
+    }
+    return 0;
+  });
+}
+
 function refreshListView() {
   const all      = buildListViewFeatures();
   const filtered = applyListFilters(all);
-  renderParcelListView(filtered, all.length);
+  const sorted   = applySort(filtered);
+  renderParcelListView(sorted, all.length);
   buildPriceBubbles(filtered);
+  buildClusterDots();
 }
 
 function renderParcelListView(features, totalCount) {
@@ -2031,6 +2136,7 @@ function renderParcelListView(features, totalCount) {
   const hasData = !!(state.taxdefault.geojson && state.taxdefault.geojson.features &&
                      state.taxdefault.geojson.features.length);
   toggleBtn.style.display = hasData ? 'block' : 'none';
+  document.getElementById('btn-draw-filter').style.display = hasData ? 'inline-block' : 'none';
 
   if (hasData) {
     const total = totalCount != null ? totalCount : features.length;
@@ -2132,13 +2238,19 @@ function renderParcelListView(features, totalCount) {
         View on Google Maps</a>`;
     }
 
+    const ain_norm = apn ? normalizeId(apn) : null;
+    const isStarred = ain_norm ? _starredAins.has(ain_norm) : false;
+
     const card = document.createElement('div');
     card.className = 'parcel-card';
-    if (apn) card.dataset.ain = normalizeId(apn);
+    if (ain_norm) card.dataset.ain = ain_norm;
     card.innerHTML = `
       <div class="card-image-wrap">
         ${imgHtml}
         ${svHtml}
+        <button class="card-star-btn${isStarred ? ' starred' : ''}" data-ain="${ain_norm || ''}" title="${isStarred ? 'Remove from saved' : 'Save parcel'}" aria-label="Save parcel">
+          ${isStarred ? '★' : '☆'}
+        </button>
       </div>
       <div class="card-body">
         <div class="card-stats">
@@ -2169,7 +2281,32 @@ function renderParcelListView(features, totalCount) {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-sv-badge')) return;
 
-      // Highlight & zoom on the map
+      // Star button toggle
+      const starBtn = e.target.closest('.card-star-btn');
+      if (starBtn) {
+        e.stopPropagation();
+        const a = starBtn.dataset.ain;
+        if (a) {
+          if (_starredAins.has(a)) {
+            _starredAins.delete(a);
+            starBtn.classList.remove('starred');
+            starBtn.textContent = '☆';
+            starBtn.title = 'Save parcel';
+          } else {
+            _starredAins.add(a);
+            starBtn.classList.add('starred');
+            starBtn.textContent = '★';
+            starBtn.title = 'Remove from saved';
+          }
+          saveStars();
+          updateListFilterClearBtn();
+          // If stars-only filter is on, re-render to remove/add this card
+          if (state.filters.starsOnly) refreshListView();
+        }
+        return;
+      }
+
+      // Highlight & zoom on the map (with pulse ring)
       highlightParcelOnMap(feature);
 
       // Visual selection state on cards
@@ -2180,6 +2317,40 @@ function renderParcelListView(features, totalCount) {
   });
 
   initLazyImages(cards);
+  updateStatsBar(features);
+}
+
+// Update the stats bar (parcel count, avg bid, avg acreage) above the card list.
+function updateStatsBar(features) {
+  const bar = document.getElementById('list-stats-bar');
+  if (!bar) return;
+  if (!features.length) { bar.textContent = ''; return; }
+
+  const af    = state.taxdefault.amountField;
+  const acreF = state.county.acreField;
+  const acreC = state.county.acreConvFactor || 1;
+  const idF   = state.taxdefault.idField;
+  let bidSum = 0, bidCount = 0, acreSum = 0, acreCount = 0;
+
+  features.forEach(f => {
+    const p   = f.properties || {};
+    const ain = idF ? normalizeId(p[idF]) : '';
+    const tp  = (ain && _parcelPropsCache.get(ain)) || {};
+    const m   = Object.keys(tp).length ? { ...tp, ...p } : p;
+    if (af) {
+      const v = parseFloat(String(m[af]||'').replace(/[^\d.]/g,''));
+      if (!isNaN(v)) { bidSum += v; bidCount++; }
+    }
+    if (acreF) {
+      const v = parseFloat(m[acreF]);
+      if (!isNaN(v)) { acreSum += v * acreC; acreCount++; }
+    }
+  });
+
+  const parts = [];
+  if (bidCount)  parts.push(`Avg bid: ${fmtBidShort(bidSum / bidCount)}`);
+  if (acreCount) parts.push(`Avg: ${(acreSum / acreCount).toFixed(1)} ac`);
+  bar.textContent = parts.join(' · ');
 }
 
 // Lazy-load .lazy-img elements inside a container using IntersectionObserver.
@@ -2264,7 +2435,8 @@ document.getElementById('list-search').addEventListener('input', refreshListView
 
 function updateListFilterClearBtn() {
   const f = state.filters;
-  const active = f.minBid || f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt;
+  const active = f.minBid || f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt
+               || f.starsOnly || f.drawnBounds;
   document.getElementById('lf-clear').style.display = active ? 'inline-block' : 'none';
 }
 
@@ -2297,8 +2469,97 @@ document.getElementById('lf-clear').addEventListener('click', () => {
   state.filters.minBid = state.filters.maxBid = state.filters.maxAcres = null;
   state.filters.useType = '';
   state.filters.minYearBuilt = state.filters.maxYearBuilt = null;
+  state.filters.starsOnly = false;
+  document.getElementById('lf-stars-toggle').classList.remove('active');
+  clearDrawFilter();
   resetBidPopover();
   syncListFilterInputs();
+  refreshListView();
+});
+
+// ─── Stars toggle ─────────────────────────────────────────────────────────────
+document.getElementById('lf-stars-toggle').addEventListener('click', () => {
+  state.filters.starsOnly = !state.filters.starsOnly;
+  document.getElementById('lf-stars-toggle').classList.toggle('active', state.filters.starsOnly);
+  updateListFilterClearBtn();
+  refreshListView();
+});
+
+// ─── Sort select ──────────────────────────────────────────────────────────────
+document.getElementById('list-sort-select').addEventListener('change', e => {
+  state.sort = e.target.value;
+  refreshListView();
+});
+
+// ─── Draw-to-filter ───────────────────────────────────────────────────────────
+function clearDrawFilter() {
+  state.filters.drawnBounds = null;
+  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
+  document.getElementById('btn-draw-clear').style.display = 'none';
+  if (_drawActive) endDrawMode();
+}
+
+function startDrawMode() {
+  _drawActive = true;
+  _drawStart  = null;
+  map.dragging.disable();
+  map.getContainer().classList.add('draw-cursor');
+  const btn = document.getElementById('btn-draw-filter');
+  btn.classList.add('draw-active');
+  btn.textContent = '✕ Cancel Draw';
+}
+
+function endDrawMode() {
+  _drawActive = false;
+  _drawStart  = null;
+  map.dragging.enable();
+  map.getContainer().classList.remove('draw-cursor');
+  const btn = document.getElementById('btn-draw-filter');
+  btn.classList.remove('draw-active');
+  btn.textContent = '⬚ Draw Filter';
+}
+
+document.getElementById('btn-draw-filter').addEventListener('click', () => {
+  if (_drawActive) { endDrawMode(); return; }
+  // Clear existing draw rect but keep bounds active until user draws a new one
+  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
+  startDrawMode();
+});
+
+document.getElementById('btn-draw-clear').addEventListener('click', () => {
+  clearDrawFilter();
+  updateListFilterClearBtn();
+  refreshListView();
+});
+
+map.on('mousedown', function(e) {
+  if (!_drawActive) return;
+  L.DomEvent.stopPropagation(e);
+  _drawStart = e.latlng;
+  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
+  _drawRectLayer = L.rectangle([_drawStart, _drawStart], {
+    color: '#facc15', weight: 2, dashArray: '6 4',
+    fillColor: '#facc15', fillOpacity: 0.08, interactive: false,
+  }).addTo(map);
+});
+
+map.on('mousemove', function(e) {
+  if (!_drawActive || !_drawStart || !_drawRectLayer) return;
+  _drawRectLayer.setBounds(L.latLngBounds(_drawStart, e.latlng));
+});
+
+map.on('mouseup', function(e) {
+  if (!_drawActive || !_drawStart) return;
+  const bounds = L.latLngBounds(_drawStart, e.latlng);
+  // Require a minimum size to avoid accidental single-clicks
+  if (bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 100) {
+    endDrawMode();
+    return;
+  }
+  state.filters.drawnBounds = bounds;
+  endDrawMode();
+  document.getElementById('btn-draw-clear').style.display = 'inline-block';
+  updateListFilterClearBtn();
   refreshListView();
 });
 
@@ -2343,29 +2604,43 @@ function buildPriceBubbles(filteredFeatures) {
     );
   }
 
-  const markers = [];
-
+  // Build candidates array (centroid + bid + feature)
+  const candidates = [];
   (tdGJ.features || []).forEach(f => {
     const props = f.properties || {};
     const ain   = idF ? normalizeId(props[idF]) : null;
 
-    // Respect list filters
     if (allowedAins && ain && !allowedAins.has(ain)) return;
 
-    // Resolve centroid: GeoJSON geometry first, then tile cache
     let latlng = null;
     if (f.geometry) {
       try { latlng = L.geoJSON(f).getBounds().getCenter(); } catch (_) {}
     }
-    if (!latlng && ain) {
-      const c = _parcelLocationCache.get(ain);
-      if (c) latlng = c;
-    }
+    if (!latlng && ain) { const c = _parcelLocationCache.get(ain); if (c) latlng = c; }
     if (!latlng) return;
 
-    // Get bid amount
     const bid = parseFloat(String(props[af] || '').replace(/[^\d.]/g, ''));
     if (isNaN(bid) || bid <= 0) return;
+
+    candidates.push({ latlng, bid, f, ain });
+  });
+
+  // Higher bids get priority when bubbles overlap — sort descending
+  candidates.sort((a, b) => b.bid - a.bid);
+
+  // Collision avoidance: skip any marker within COLLISION_PX pixels of an already-placed one
+  const COLLISION_PX = 42;
+  const placed = []; // pixel-space points of placed markers
+  const markers = [];
+
+  candidates.forEach(({ latlng, bid, f, ain }) => {
+    const pt = map.latLngToLayerPoint([latlng.lat, latlng.lng]);
+    const blocked = placed.some(p => {
+      const dx = pt.x - p.x, dy = pt.y - p.y;
+      return Math.sqrt(dx * dx + dy * dy) < COLLISION_PX;
+    });
+    if (blocked) return;
+    placed.push(pt);
 
     const marker = L.marker([latlng.lat, latlng.lng], {
       icon: L.divIcon({
@@ -2392,8 +2667,49 @@ function buildPriceBubbles(filteredFeatures) {
   }
 }
 
-// Show/hide bubbles when zoom crosses the threshold
-map.on('zoomend', () => buildPriceBubbles());
+// ─── Low-zoom cluster dots ────────────────────────────────────────────────────
+// At zoom DOT_MIN_ZOOM..BUBBLE_MIN_ZOOM-1 show small orange dots so users
+// can see where defaults are concentrated before zooming in for price bubbles.
+function buildClusterDots() {
+  if (_dotLayer) { map.removeLayer(_dotLayer); _dotLayer = null; }
+
+  const z = map.getZoom();
+  if (z >= BUBBLE_MIN_ZOOM || z < DOT_MIN_ZOOM) return;
+
+  const tdGJ = state.taxdefault.geojson;
+  if (!tdGJ) return;
+
+  const idF = state.taxdefault.idField;
+  const circles = [];
+
+  (tdGJ.features || []).forEach(f => {
+    const props = f.properties || {};
+    const ain   = idF ? normalizeId(props[idF]) : null;
+
+    let latlng = null;
+    if (f.geometry) {
+      try { latlng = L.geoJSON(f).getBounds().getCenter(); } catch (_) {}
+    }
+    if (!latlng && ain) { const c = _parcelLocationCache.get(ain); if (c) latlng = c; }
+    if (!latlng) return;
+
+    circles.push(L.circleMarker([latlng.lat, latlng.lng], {
+      radius: 5,
+      color: '#f97316',
+      fillColor: '#f97316',
+      fillOpacity: 0.75,
+      weight: 1,
+      interactive: false,
+    }));
+  });
+
+  if (circles.length) {
+    _dotLayer = L.layerGroup(circles).addTo(map);
+  }
+}
+
+// Rebuild both layers whenever zoom changes
+map.on('zoomend', () => { buildPriceBubbles(); buildClusterDots(); });
 
 // ─── Collect all numeric bid values from loaded tax-default parcels ───────────
 function getBidValues() {
@@ -3143,6 +3459,9 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
 
   document.getElementById('results-panel').style.display = 'none';
   document.getElementById('btn-show-results').style.display = 'none';
+  document.getElementById('btn-draw-filter').style.display = 'none';
+  document.getElementById('btn-draw-clear').style.display = 'none';
+  clearDrawFilter();
   document.getElementById('btn-export').disabled = true;
   document.getElementById('btn-run-match').disabled = true;
   document.getElementById('match-status').textContent = '';

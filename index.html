@@ -271,6 +271,8 @@
           Show Results (<span id="toolbar-count">0</span>)
         </button>
         <button id="btn-list-view" class="btn btn-sm" style="display:none;">&#9776; List</button>
+        <button id="btn-draw-filter" class="btn btn-sm" style="display:none;" title="Draw a box on the map to filter parcels">&#9633; Draw Filter</button>
+        <button id="btn-draw-clear" class="btn btn-sm btn-warn" style="display:none;" title="Clear draw filter">&#10005; Clear Box</button>
         <button id="btn-basemap-toggle" class="btn btn-sm">Satellite</button>
       </div>
 
@@ -330,7 +332,26 @@
               <input type="number" id="lf-year-max" class="lf-input lf-input-sm" placeholder="Max" min="1800" max="2030">
             </div>
           </div>
+          <div class="lf-group">
+            <button id="lf-stars-toggle" class="lf-star-toggle" title="Show saved parcels only">&#9734; Saved</button>
+          </div>
           <button id="lf-clear" class="lf-clear-btn" style="display:none;">✕ Clear</button>
+        </div>
+        <!-- Sort + stats row -->
+        <div class="list-sort-stats-bar">
+          <div class="list-sort-wrap">
+            <label for="list-sort-select" class="list-sort-label">Sort</label>
+            <select id="list-sort-select" class="list-sort-select">
+              <option value="default">Default</option>
+              <option value="bid-asc">Bid ↑</option>
+              <option value="bid-desc">Bid ↓</option>
+              <option value="acres-asc">Acres ↑</option>
+              <option value="acres-desc">Acres ↓</option>
+              <option value="year-asc">Year ↑</option>
+              <option value="year-desc">Year ↓</option>
+            </select>
+          </div>
+          <div id="list-stats-bar" class="list-stats-text"></div>
         </div>
         <div id="parcel-list-cards" class="parcel-list-cards"></div>
       </div>
