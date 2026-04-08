@@ -3098,93 +3098,9 @@ document.getElementById('results-sort').addEventListener('change', () => {
   renderResultsList(state.matched, document.getElementById('results-search').value);
 });
 
-// ─── Filter bar pill logic ────────────────────────────────────────────────────
-
 function getSearchText() {
   return document.getElementById('results-search').value;
 }
-
-function updateFilterPills() {
-  // Bid pills
-  document.querySelectorAll('.fpill-option[data-max-bid]').forEach(btn => {
-    const val = btn.dataset.maxBid ? Number(btn.dataset.maxBid) : null;
-    btn.classList.toggle('active', val === state.filters.maxBid);
-  });
-  const bidBtn = document.getElementById('bid-fpill-btn');
-  bidBtn.classList.toggle('active', state.filters.maxBid !== null || state.filters.minBid !== null);
-
-  // Acres pills
-  document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
-    const val = btn.dataset.maxAcres ? Number(btn.dataset.maxAcres) : null;
-    btn.classList.toggle('active', val === state.filters.maxAcres);
-  });
-  const acresBtn = document.getElementById('acres-fpill-btn');
-  acresBtn.classList.toggle('active', state.filters.maxAcres !== null);
-
-  // Clear-all button
-  const anyActive = state.filters.maxBid !== null || state.filters.maxAcres !== null;
-  document.getElementById('fbar-clear-all').style.display = anyActive ? 'block' : 'none';
-}
-
-function closeFpillMenus() {
-  document.querySelectorAll('.fpill-menu').forEach(m => m.classList.remove('open'));
-  document.querySelectorAll('.fpill-btn').forEach(b => b.removeAttribute('aria-expanded'));
-}
-
-function toggleFpillMenu(menuId, btnId) {
-  const menu = document.getElementById(menuId);
-  const btn  = document.getElementById(btnId);
-  const isOpen = menu.classList.contains('open');
-  closeFpillMenus();
-  if (!isOpen) {
-    menu.classList.add('open');
-    btn.setAttribute('aria-expanded', 'true');
-  }
-}
-
-document.getElementById('bid-fpill-btn').addEventListener('click', e => {
-  e.stopPropagation();
-  toggleFpillMenu('bid-fpill-menu', 'bid-fpill-btn');
-});
-
-document.getElementById('acres-fpill-btn').addEventListener('click', e => {
-  e.stopPropagation();
-  toggleFpillMenu('acres-fpill-menu', 'acres-fpill-btn');
-});
-
-document.querySelectorAll('.fpill-option[data-max-bid]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    state.filters.maxBid = btn.dataset.maxBid ? Number(btn.dataset.maxBid) : null;
-    closeFpillMenus();
-    updateFilterPills();
-    renderResultsList(state.matched, getSearchText());
-    refreshListView();
-  });
-});
-
-document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    state.filters.maxAcres = btn.dataset.maxAcres ? Number(btn.dataset.maxAcres) : null;
-    closeFpillMenus();
-    updateFilterPills();
-    renderResultsList(state.matched, getSearchText());
-    refreshListView();
-  });
-});
-
-document.getElementById('fbar-clear-all').addEventListener('click', () => {
-  state.filters.minBid   = null;
-  state.filters.maxBid   = null;
-  state.filters.maxAcres = null;
-  resetBidPopover();
-  updateBidPillLabel();
-  updateFilterPills();
-  renderResultsList(state.matched, getSearchText());
-  refreshListView();
-});
-
-// Close menus when clicking outside
-document.addEventListener('click', closeFpillMenus);
 
 // Export
 document.getElementById('btn-export').addEventListener('click', exportMatchedCSV);

@@ -243,39 +243,6 @@
     <main class="map-container">
       <div id="map"></div>
 
-      <!-- Filter pills floating on map (upper-left) -->
-      <div class="map-filter-bar" id="filter-bar">
-       <div class="filter-bar-pills">
-        <div class="fpill-wrap" id="bid-fpill">
-          <button class="fpill-btn" id="bid-fpill-btn" type="button">
-            <span id="bid-fpill-label">Min Bid</span>
-            <svg class="fpill-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
-          </button>
-          <div class="fpill-menu" id="bid-fpill-menu">
-            <button class="fpill-option active" data-max-bid="">Any price</button>
-            <button class="fpill-option" data-max-bid="5000">Under $5K</button>
-            <button class="fpill-option" data-max-bid="10000">Under $10K</button>
-            <button class="fpill-option" data-max-bid="25000">Under $25K</button>
-            <button class="fpill-option" data-max-bid="50000">Under $50K</button>
-            <button class="fpill-option" data-max-bid="100000">Under $100K</button>
-            <button class="fpill-option" data-max-bid="250000">Under $250K</button>
-          </div>
-        </div>
-        <div class="fpill-wrap" id="acres-fpill">
-          <button class="fpill-btn" id="acres-fpill-btn" type="button">
-            <span id="acres-fpill-label">Acreage</span>
-            <svg class="fpill-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 1l4 4 4-4"/></svg>
-          </button>
-          <div class="fpill-menu" id="acres-fpill-menu">
-            <button class="fpill-option active" data-max-acres="">Any size</button>
-            <button class="fpill-option" data-max-acres="5">5 acres or less</button>
-            <button class="fpill-option" data-max-acres="10">10 acres or less</button>
-            <button class="fpill-option" data-max-acres="50">50 acres or less</button>
-          </div>
-        </div>
-        <button class="fbar-clear" id="fbar-clear-all" style="display:none;" type="button">Clear</button>
-       </div>
-      </div>
 
       <!-- Results overlay panel -->
       <div class="results-panel" id="results-panel" style="display:none;">
