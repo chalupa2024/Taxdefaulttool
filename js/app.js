@@ -20,7 +20,8 @@ const state = {
     tileYearBuiltField: null, // YearBuilt field detected from MVT tile attributes
   },
   filters: {
-    maxBid:       null,   // top-bar + list panel: bid <= this
+    minBid:       null,   // list panel: bid >= this (Zillow-style popover)
+    maxBid:       null,   // list panel + top-bar: bid <= this
     maxAcres:     null,   // top-bar + list panel: acres <= this
     useType:      '',     // list panel: exact use type match ('' = all)
     minYearBuilt: null,   // list panel: year built >= this
@@ -1591,12 +1592,15 @@ function renderResultsList(features, filter = '') {
     ? sorted.filter(f => JSON.stringify(f.properties).toLowerCase().includes(filterLower))
     : sorted;
 
-  // Filter by max bid (Under $X)
-  if (state.filters.maxBid && state.taxdefault.amountField) {
+  // Filter by bid range (min/max)
+  if ((state.filters.minBid || state.filters.maxBid) && state.taxdefault.amountField) {
     const af = state.taxdefault.amountField;
     visible = visible.filter(f => {
       const raw = parseFloat(String((f.properties || {})[af] || '').replace(/[^\d.]/g, ''));
-      return !isNaN(raw) && raw <= state.filters.maxBid;
+      if (isNaN(raw)) return true;
+      if (state.filters.minBid && raw < state.filters.minBid) return false;
+      if (state.filters.maxBid && raw > state.filters.maxBid) return false;
+      return true;
     });
   }
 
@@ -1944,9 +1948,12 @@ function applyListFilters(features) {
 
     if (search && !JSON.stringify(m).toLowerCase().includes(search)) return false;
 
-    if (state.filters.maxBid && af) {
+    if ((state.filters.minBid || state.filters.maxBid) && af) {
       const v = parseFloat(String(m[af]||'').replace(/[^\d.]/g,''));
-      if (!isNaN(v) && v > state.filters.maxBid) return false;
+      if (!isNaN(v)) {
+        if (state.filters.minBid && v < state.filters.minBid) return false;
+        if (state.filters.maxBid && v > state.filters.maxBid) return false;
+      }
     }
     if (state.filters.maxAcres && acreF) {
       const v = parseFloat(m[acreF]);
@@ -2245,13 +2252,14 @@ document.getElementById('list-search').addEventListener('input', refreshListView
 
 function updateListFilterClearBtn() {
   const f = state.filters;
-  const active = f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt;
+  const active = f.minBid || f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt;
   document.getElementById('lf-clear').style.display = active ? 'inline-block' : 'none';
 }
 
 function syncListFilterInputs() {
   const f = state.filters;
-  document.getElementById('lf-max-bid').value    = f.maxBid       || '';
+  // Bid pill button label
+  updateBidPillLabel();
   document.getElementById('lf-max-acres').value  = f.maxAcres     || '';
   document.getElementById('lf-use-type').value   = f.useType      || '';
   document.getElementById('lf-year-min').value   = f.minYearBuilt || '';
@@ -2260,7 +2268,6 @@ function syncListFilterInputs() {
 }
 
 function onListFilterChange() {
-  state.filters.maxBid       = parseFloat(document.getElementById('lf-max-bid').value)   || null;
   state.filters.maxAcres     = parseFloat(document.getElementById('lf-max-acres').value) || null;
   state.filters.useType      = document.getElementById('lf-use-type').value.trim();
   state.filters.minYearBuilt = parseInt(document.getElementById('lf-year-min').value)    || null;
@@ -2269,18 +2276,254 @@ function onListFilterChange() {
   refreshListView();
 }
 
-['lf-max-bid','lf-max-acres','lf-use-type','lf-year-min','lf-year-max'].forEach(id => {
+['lf-max-acres','lf-use-type','lf-year-min','lf-year-max'].forEach(id => {
   const el = document.getElementById(id);
   el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', onListFilterChange);
 });
 
 document.getElementById('lf-clear').addEventListener('click', () => {
-  state.filters.maxBid = state.filters.maxAcres = null;
+  state.filters.minBid = state.filters.maxBid = state.filters.maxAcres = null;
   state.filters.useType = '';
   state.filters.minYearBuilt = state.filters.maxYearBuilt = null;
+  resetBidPopover();
   syncListFilterInputs();
   refreshListView();
 });
+
+// ─── Zillow-style bid price popover ──────────────────────────────────────────
+
+let _bidAbsMin = 0;   // lowest bid value in loaded data
+let _bidAbsMax = 0;   // highest bid value in loaded data
+let _bidBuckets = []; // histogram bucket counts (20 buckets)
+
+// Format a dollar amount compactly: 1500 → "$1.5k", 200000 → "$200k"
+function fmtBidShort(v) {
+  if (!v && v !== 0) return '';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'k';
+  return '$' + v.toFixed(0);
+}
+
+// Collect all numeric bid values from loaded tax-default parcels.
+function getBidValues() {
+  const af = state.taxdefault.amountField;
+  if (!af || !state.taxdefault.geojson) return [];
+  return state.taxdefault.geojson.features
+    .map(f => parseFloat(String((f.properties || {})[af] || '').replace(/[^\d.]/g, '')))
+    .filter(v => !isNaN(v) && v > 0);
+}
+
+// Build histogram bucket array from values and absolute range.
+function computeBidBuckets(values, mn, mx, numBuckets) {
+  const buckets = new Array(numBuckets).fill(0);
+  if (mx <= mn) return buckets;
+  const size = (mx - mn) / numBuckets;
+  values.forEach(v => {
+    const i = Math.min(Math.floor((v - mn) / size), numBuckets - 1);
+    buckets[i]++;
+  });
+  return buckets;
+}
+
+// Render histogram bars inside #lf-bid-hist.
+function buildBidHistogram() {
+  const hist = document.getElementById('lf-bid-hist');
+  if (!hist) return;
+  hist.innerHTML = '';
+  const maxCount = Math.max(..._bidBuckets, 1);
+  _bidBuckets.forEach((count, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'lf-hist-bar';
+    bar.dataset.idx = i;
+    bar.style.height = Math.max(2, Math.round((count / maxCount) * 100)) + '%';
+    hist.appendChild(bar);
+  });
+  updateHistogramHighlight();
+}
+
+// Highlight histogram bars that fall inside the current slider range.
+function updateHistogramHighlight() {
+  const minSl = document.getElementById('lf-bid-min-sl');
+  const maxSl = document.getElementById('lf-bid-max-sl');
+  if (!minSl || !maxSl) return;
+  const lo = parseInt(minSl.value);
+  const hi = parseInt(maxSl.value);
+  document.querySelectorAll('#lf-bid-hist .lf-hist-bar').forEach(bar => {
+    const i = parseInt(bar.dataset.idx);
+    bar.classList.toggle('in-range', i >= lo && i <= hi);
+  });
+}
+
+// Update the blue fill strip and text inputs to match the current slider values.
+function updateBidSliderUI() {
+  const minSl  = document.getElementById('lf-bid-min-sl');
+  const maxSl  = document.getElementById('lf-bid-max-sl');
+  const fill   = document.getElementById('lf-bid-fill');
+  const minTxt = document.getElementById('lf-bid-min-txt');
+  const maxTxt = document.getElementById('lf-bid-max-txt');
+  if (!minSl || !maxSl || !fill) return;
+
+  const numBuckets = _bidBuckets.length || 20;
+  const range = _bidAbsMax - _bidAbsMin || 1;
+  const lo = parseInt(minSl.value);
+  const hi = parseInt(maxSl.value);
+  const leftPct  = (lo / numBuckets) * 100;
+  const rightPct = (hi / numBuckets) * 100;
+
+  fill.style.left  = leftPct  + '%';
+  fill.style.width = Math.max(0, rightPct - leftPct) + '%';
+
+  // Convert bucket index back to dollar value
+  const bucketSize = range / numBuckets;
+  const loVal = _bidAbsMin + lo * bucketSize;
+  const hiVal = _bidAbsMin + (hi + 1) * bucketSize;
+
+  if (minTxt) minTxt.value = lo === 0 ? '' : Math.round(loVal).toString();
+  if (maxTxt) maxTxt.value = hi === numBuckets - 1 ? '' : Math.round(hiVal).toString();
+
+  updateHistogramHighlight();
+}
+
+// Update the pill button text to reflect active range.
+function updateBidPillLabel() {
+  const btn = document.getElementById('lf-bid-btn');
+  if (!btn) return;
+  const mn = state.filters.minBid;
+  const mx = state.filters.maxBid;
+  let label = 'Any';
+  if (mn && mx)      label = fmtBidShort(mn) + ' – ' + fmtBidShort(mx);
+  else if (mn)       label = fmtBidShort(mn) + '+';
+  else if (mx)       label = 'Up to ' + fmtBidShort(mx);
+  const svg = btn.querySelector('svg');
+  btn.textContent = label + ' ';
+  if (svg) btn.appendChild(svg);
+  btn.classList.toggle('active', !!(mn || mx));
+}
+
+// Initialize sliders to cover the full data range.
+function initBidSlider() {
+  const values = getBidValues();
+  if (!values.length) return;
+  _bidAbsMin = Math.min(...values);
+  _bidAbsMax = Math.max(...values);
+  const numBuckets = 20;
+  _bidBuckets = computeBidBuckets(values, _bidAbsMin, _bidAbsMax, numBuckets);
+
+  const minSl = document.getElementById('lf-bid-min-sl');
+  const maxSl = document.getElementById('lf-bid-max-sl');
+  if (!minSl || !maxSl) return;
+
+  minSl.min = 0; minSl.max = numBuckets - 1; minSl.value = 0;
+  maxSl.min = 0; maxSl.max = numBuckets - 1; maxSl.value = numBuckets - 1;
+
+  buildBidHistogram();
+  updateBidSliderUI();
+}
+
+// Reset popover back to "Any" state (called by Clear button).
+function resetBidPopover() {
+  const minSl = document.getElementById('lf-bid-min-sl');
+  const maxSl = document.getElementById('lf-bid-max-sl');
+  const numBuckets = _bidBuckets.length || 20;
+  if (minSl) minSl.value = 0;
+  if (maxSl) maxSl.value = numBuckets - 1;
+  const minTxt = document.getElementById('lf-bid-min-txt');
+  const maxTxt = document.getElementById('lf-bid-max-txt');
+  if (minTxt) minTxt.value = '';
+  if (maxTxt) maxTxt.value = '';
+  updateBidSliderUI();
+  updateBidPillLabel();
+}
+
+// ── Bid popover open/close ────────────────────────────────────────────────────
+(function initBidPopoverEvents() {
+  const btn     = document.getElementById('lf-bid-btn');
+  const popover = document.getElementById('lf-bid-popover');
+  const minSl   = document.getElementById('lf-bid-min-sl');
+  const maxSl   = document.getElementById('lf-bid-max-sl');
+  const minTxt  = document.getElementById('lf-bid-min-txt');
+  const maxTxt  = document.getElementById('lf-bid-max-txt');
+  const applyBtn = document.getElementById('lf-bid-apply');
+  if (!btn || !popover) return;
+
+  // Toggle popover on pill button click
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !popover.hidden;
+    popover.hidden = open;
+    btn.setAttribute('aria-expanded', String(!open));
+    if (!open) {
+      // Re-initialise slider whenever we open (data may have loaded since last open)
+      initBidSlider();
+    }
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', e => {
+    if (!popover.hidden && !document.getElementById('lf-bid-wrap').contains(e.target)) {
+      popover.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // Min slider
+  minSl.addEventListener('input', () => {
+    const numBuckets = parseInt(maxSl.max) + 1;
+    if (parseInt(minSl.value) > parseInt(maxSl.value)) {
+      minSl.value = maxSl.value;
+    }
+    updateBidSliderUI();
+  });
+
+  // Max slider
+  maxSl.addEventListener('input', () => {
+    if (parseInt(maxSl.value) < parseInt(minSl.value)) {
+      maxSl.value = minSl.value;
+    }
+    updateBidSliderUI();
+  });
+
+  // Min text input → clamp and sync slider
+  minTxt.addEventListener('change', () => {
+    const v = parseFloat(minTxt.value);
+    if (isNaN(v)) { minTxt.value = ''; return; }
+    const numBuckets = _bidBuckets.length || 20;
+    const bucketSize = (_bidAbsMax - _bidAbsMin || 1) / numBuckets;
+    const idx = Math.max(0, Math.min(numBuckets - 1, Math.floor((v - _bidAbsMin) / bucketSize)));
+    minSl.value = idx;
+    if (parseInt(minSl.value) > parseInt(maxSl.value)) maxSl.value = minSl.value;
+    updateBidSliderUI();
+  });
+
+  // Max text input → clamp and sync slider
+  maxTxt.addEventListener('change', () => {
+    const v = parseFloat(maxTxt.value);
+    if (isNaN(v)) { maxTxt.value = ''; return; }
+    const numBuckets = _bidBuckets.length || 20;
+    const bucketSize = (_bidAbsMax - _bidAbsMin || 1) / numBuckets;
+    const idx = Math.max(0, Math.min(numBuckets - 1, Math.floor((v - _bidAbsMin) / bucketSize)));
+    maxSl.value = idx;
+    if (parseInt(maxSl.value) < parseInt(minSl.value)) minSl.value = maxSl.value;
+    updateBidSliderUI();
+  });
+
+  // Apply button → commit filter to state and close
+  applyBtn.addEventListener('click', () => {
+    const numBuckets = _bidBuckets.length || 20;
+    const bucketSize = (_bidAbsMax - _bidAbsMin || 1) / numBuckets;
+    const lo = parseInt(minSl.value);
+    const hi = parseInt(maxSl.value);
+    const loVal = _bidAbsMin + lo * bucketSize;
+    const hiVal = _bidAbsMin + (hi + 1) * bucketSize;
+    state.filters.minBid = (lo === 0)               ? null : Math.round(loVal);
+    state.filters.maxBid = (hi === numBuckets - 1)  ? null : Math.round(hiVal);
+    updateBidPillLabel();
+    updateListFilterClearBtn();
+    popover.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    refreshListView();
+  });
+})();
 
 // ─── CSV Export ───────────────────────────────────────────────────────────────
 
@@ -2775,7 +3018,7 @@ function updateFilterPills() {
     btn.classList.toggle('active', val === state.filters.maxBid);
   });
   const bidBtn = document.getElementById('bid-fpill-btn');
-  bidBtn.classList.toggle('active', state.filters.maxBid !== null);
+  bidBtn.classList.toggle('active', state.filters.maxBid !== null || state.filters.minBid !== null);
 
   // Acres pills
   document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
@@ -2837,8 +3080,11 @@ document.querySelectorAll('.fpill-option[data-max-acres]').forEach(btn => {
 });
 
 document.getElementById('fbar-clear-all').addEventListener('click', () => {
+  state.filters.minBid   = null;
   state.filters.maxBid   = null;
   state.filters.maxAcres = null;
+  resetBidPopover();
+  updateBidPillLabel();
   updateFilterPills();
   renderResultsList(state.matched, getSearchText());
   refreshListView();

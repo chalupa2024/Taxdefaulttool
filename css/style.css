@@ -692,6 +692,185 @@ html, body {
 }
 .lf-clear-btn:hover { color: var(--color-text); border-color: var(--color-text-muted); }
 
+/* ── Bid price pill button & popover ──────────────────────────────────────── */
+.lf-group-pop { position: relative; }
+
+.lf-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.lf-pill-btn:hover { border-color: var(--color-text-muted); }
+.lf-pill-btn.active {
+  border-color: var(--color-primary);
+  background: rgba(79,126,248,0.12);
+  color: var(--color-primary);
+}
+.lf-pill-btn svg { flex-shrink: 0; transition: transform 0.15s; }
+.lf-pill-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.lf-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 900;
+  width: 280px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+.lf-pop-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+
+/* Histogram */
+.lf-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 52px;
+  margin-bottom: 6px;
+}
+.lf-hist-bar {
+  flex: 1;
+  background: var(--color-border);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: background 0.12s;
+}
+.lf-hist-bar.in-range { background: var(--color-primary); }
+
+/* Dual-handle range slider */
+.lf-slider-container {
+  position: relative;
+  height: 20px;
+  margin-bottom: 10px;
+}
+.lf-slider-track {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.lf-slider-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+.lf-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+}
+.lf-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  pointer-events: all;
+  cursor: grab;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.lf-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  pointer-events: all;
+  cursor: grab;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.lf-slider:active::-webkit-slider-thumb { cursor: grabbing; }
+.lf-slider:active::-moz-range-thumb     { cursor: grabbing; }
+
+/* Min / Max text inputs row */
+.lf-pop-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.lf-pop-input-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lf-pop-input-wrap label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.lf-pop-input-wrap input {
+  width: 100%;
+  padding: 5px 7px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+}
+.lf-pop-input-wrap input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.lf-pop-dash {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+
+/* Apply button */
+.lf-apply-btn {
+  width: 100%;
+  padding: 7px 12px;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lf-apply-btn:hover { background: var(--color-primary-hover); }
+
 .parcel-list-cards {
   flex: 1;
   overflow-y: auto;
