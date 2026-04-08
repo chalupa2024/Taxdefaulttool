@@ -2405,9 +2405,11 @@ function initBidSlider() {
   const values = getBidValues();
   if (!values.length) return;
   _bidAbsMin = Math.min(...values);
-  _bidAbsMax = Math.max(...values);
+  _bidAbsMax = Math.min(Math.max(...values), 1_000_000); // cap at $1M
   const numBuckets = 20;
-  _bidBuckets = computeBidBuckets(values, _bidAbsMin, _bidAbsMax, numBuckets);
+  // Only include values within the capped range for the histogram
+  const cappedValues = values.filter(v => v <= _bidAbsMax);
+  _bidBuckets = computeBidBuckets(cappedValues, _bidAbsMin, _bidAbsMax, numBuckets);
 
   const minSl = document.getElementById('lf-bid-min-sl');
   const maxSl = document.getElementById('lf-bid-max-sl');
