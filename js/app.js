@@ -27,7 +27,6 @@ const state = {
     minYearBuilt: null,   // list panel: year built >= this
     maxYearBuilt: null,   // list panel: year built <= this
     starsOnly:    false,  // show only starred/saved parcels
-    drawnBounds:  null,   // L.LatLngBounds from draw-filter rectangle
   },
   sort: 'default',        // sort key: 'default' | 'bid-asc' | 'bid-desc' | 'acres-asc' | 'acres-desc' | 'year-asc' | 'year-desc'
   ownership: {
@@ -904,10 +903,6 @@ function saveStars() {
   try { localStorage.setItem('taxdefault-stars', JSON.stringify([..._starredAins])); } catch (_) {}
 }
 
-// ── Draw-filter state ─────────────────────────────────────────────────────
-let _drawActive   = false;
-let _drawStart    = null;
-let _drawRectLayer = null;
 
 // Caches full parcel attribute properties (AIN → props object) from MVT tiles.
 // Used to enrich list cards with UseType, YearBuilt, Acreage, etc. that aren't
@@ -2031,15 +2026,6 @@ function applyListFilters(features) {
     if (state.filters.starsOnly) {
       if (!ain || !_starredAins.has(ain)) return false;
     }
-    // Draw-bounds filter — parcel centroid must be inside drawn rectangle
-    if (state.filters.drawnBounds) {
-      let latlng = null;
-      if (f.geometry) {
-        try { latlng = L.geoJSON(f).getBounds().getCenter(); } catch (_) {}
-      }
-      if (!latlng && ain) { const c = _parcelLocationCache.get(ain); if (c) latlng = c; }
-      if (latlng && !state.filters.drawnBounds.contains(latlng)) return false;
-    }
     return true;
   });
 }
@@ -2136,7 +2122,6 @@ function renderParcelListView(features, totalCount) {
   const hasData = !!(state.taxdefault.geojson && state.taxdefault.geojson.features &&
                      state.taxdefault.geojson.features.length);
   toggleBtn.style.display = hasData ? 'block' : 'none';
-  document.getElementById('btn-draw-filter').style.display = hasData ? 'inline-block' : 'none';
 
   if (hasData) {
     const total = totalCount != null ? totalCount : features.length;
@@ -2436,7 +2421,7 @@ document.getElementById('list-search').addEventListener('input', refreshListView
 function updateListFilterClearBtn() {
   const f = state.filters;
   const active = f.minBid || f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt
-               || f.starsOnly || f.drawnBounds;
+               || f.starsOnly;
   document.getElementById('lf-clear').style.display = active ? 'inline-block' : 'none';
 }
 
@@ -2471,7 +2456,6 @@ document.getElementById('lf-clear').addEventListener('click', () => {
   state.filters.minYearBuilt = state.filters.maxYearBuilt = null;
   state.filters.starsOnly = false;
   document.getElementById('lf-stars-toggle').classList.remove('active');
-  clearDrawFilter();
   resetBidPopover();
   syncListFilterInputs();
   refreshListView();
@@ -2488,78 +2472,6 @@ document.getElementById('lf-stars-toggle').addEventListener('click', () => {
 // ─── Sort select ──────────────────────────────────────────────────────────────
 document.getElementById('list-sort-select').addEventListener('change', e => {
   state.sort = e.target.value;
-  refreshListView();
-});
-
-// ─── Draw-to-filter ───────────────────────────────────────────────────────────
-function clearDrawFilter() {
-  state.filters.drawnBounds = null;
-  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
-  document.getElementById('btn-draw-clear').style.display = 'none';
-  if (_drawActive) endDrawMode();
-}
-
-function startDrawMode() {
-  _drawActive = true;
-  _drawStart  = null;
-  map.dragging.disable();
-  map.getContainer().classList.add('draw-cursor');
-  const btn = document.getElementById('btn-draw-filter');
-  btn.classList.add('draw-active');
-  btn.textContent = '✕ Cancel Draw';
-}
-
-function endDrawMode() {
-  _drawActive = false;
-  _drawStart  = null;
-  map.dragging.enable();
-  map.getContainer().classList.remove('draw-cursor');
-  const btn = document.getElementById('btn-draw-filter');
-  btn.classList.remove('draw-active');
-  btn.textContent = '⬚ Draw Filter';
-}
-
-document.getElementById('btn-draw-filter').addEventListener('click', () => {
-  if (_drawActive) { endDrawMode(); return; }
-  // Clear existing draw rect but keep bounds active until user draws a new one
-  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
-  startDrawMode();
-});
-
-document.getElementById('btn-draw-clear').addEventListener('click', () => {
-  clearDrawFilter();
-  updateListFilterClearBtn();
-  refreshListView();
-});
-
-map.on('mousedown', function(e) {
-  if (!_drawActive) return;
-  L.DomEvent.stopPropagation(e);
-  _drawStart = e.latlng;
-  if (_drawRectLayer) { map.removeLayer(_drawRectLayer); _drawRectLayer = null; }
-  _drawRectLayer = L.rectangle([_drawStart, _drawStart], {
-    color: '#facc15', weight: 2, dashArray: '6 4',
-    fillColor: '#facc15', fillOpacity: 0.08, interactive: false,
-  }).addTo(map);
-});
-
-map.on('mousemove', function(e) {
-  if (!_drawActive || !_drawStart || !_drawRectLayer) return;
-  _drawRectLayer.setBounds(L.latLngBounds(_drawStart, e.latlng));
-});
-
-map.on('mouseup', function(e) {
-  if (!_drawActive || !_drawStart) return;
-  const bounds = L.latLngBounds(_drawStart, e.latlng);
-  // Require a minimum size to avoid accidental single-clicks
-  if (bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 100) {
-    endDrawMode();
-    return;
-  }
-  state.filters.drawnBounds = bounds;
-  endDrawMode();
-  document.getElementById('btn-draw-clear').style.display = 'inline-block';
-  updateListFilterClearBtn();
   refreshListView();
 });
 
@@ -3459,9 +3371,6 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
 
   document.getElementById('results-panel').style.display = 'none';
   document.getElementById('btn-show-results').style.display = 'none';
-  document.getElementById('btn-draw-filter').style.display = 'none';
-  document.getElementById('btn-draw-clear').style.display = 'none';
-  clearDrawFilter();
   document.getElementById('btn-export').disabled = true;
   document.getElementById('btn-run-match').disabled = true;
   document.getElementById('match-status').textContent = '';

@@ -911,9 +911,6 @@ html, body {
 /* ── Cluster dot markers (low zoom) ─────────────────────────────────────── */
 .cluster-dot-icon { background: transparent !important; border: none !important; }
 
-/* ── Draw-filter rectangle highlight ────────────────────────────────────── */
-.draw-cursor { cursor: crosshair !important; }
-
 .parcel-list-cards {
   flex: 1;
   overflow-y: auto;
@@ -1069,16 +1066,6 @@ html, body {
   box-shadow: var(--shadow);
 }
 .map-toolbar .btn:hover { background: var(--color-surface-2); }
-.map-toolbar .btn.draw-active {
-  background: var(--color-warning);
-  border-color: var(--color-warning);
-  color: #000;
-}
-.btn-warn {
-  background: rgba(245,158,11,0.15) !important;
-  border-color: var(--color-warning) !important;
-  color: var(--color-warning) !important;
-}
 
 /* ---- Results Panel (overlay) ---- */
 .results-panel {
