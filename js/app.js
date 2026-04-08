@@ -710,6 +710,10 @@ function addTaxDefaultLayer(geojson) {
     map.removeLayer(state.taxdefault.layer);
     state.taxdefault.layer = null;
   }
+  if (_priceBubbleLayer) {
+    map.removeLayer(_priceBubbleLayer);
+    _priceBubbleLayer = null;
+  }
   const validFeatures = (geojson.features || []).filter(f => f.geometry);
   if (validFeatures.length === 0) {
     // Try county first, then ownership as fallback
@@ -728,6 +732,7 @@ function addTaxDefaultLayer(geojson) {
   });
   layer.addTo(map);
   state.taxdefault.layer = layer;
+  buildPriceBubbles();
 }
 
 // Fallback: build tax default preview from ownership geometry when no county loaded.
@@ -779,6 +784,7 @@ function buildTaxDefaultPreviewFromOwnership() {
   );
   layer.addTo(map);
   state.taxdefault.layer = layer;
+  buildPriceBubbles();
 }
 
 function addMatchedLayer(matchedFeatures) {
@@ -878,6 +884,8 @@ const _countyBoundaryCache = {};
 // Caches parcel centroids (AIN → {lat, lng}) discovered via map tile clicks.
 // Lets list-card clicks zoom to parcels that have been touched on the map.
 const _parcelLocationCache = new Map();
+let _priceBubbleLayer = null;          // Zillow-style price bubble markers
+const BUBBLE_MIN_ZOOM = 12;            // Only render bubbles at this zoom or higher
 
 // Caches full parcel attribute properties (AIN → props object) from MVT tiles.
 // Used to enrich list cards with UseType, YearBuilt, Acreage, etc. that aren't
@@ -1263,7 +1271,10 @@ function buildMapboxVectorLayer(county) {
     clearTimeout(_tileRefreshTimer);
     _tileRefreshTimer = setTimeout(() => {
       tryDetectTileFields();
-      if (state.taxdefault.geojson) refreshListView();
+      if (state.taxdefault.geojson) {
+        refreshListView();
+        buildPriceBubbles();
+      }
     }, 500);
   });
 
@@ -2008,6 +2019,7 @@ function refreshListView() {
   const all      = buildListViewFeatures();
   const filtered = applyListFilters(all);
   renderParcelListView(filtered, all.length);
+  buildPriceBubbles(filtered);
 }
 
 function renderParcelListView(features, totalCount) {
@@ -2304,7 +2316,86 @@ function fmtBidShort(v) {
   return '$' + v.toFixed(0);
 }
 
-// Collect all numeric bid values from loaded tax-default parcels.
+// ─── Price bubble map markers ─────────────────────────────────────────────────
+
+// Build (or rebuild) Zillow-style price bubble markers for every tax-default
+// parcel that has a known centroid. Pass the already-filtered feature array
+// from refreshListView so bubbles stay in sync with list filters.
+function buildPriceBubbles(filteredFeatures) {
+  // Remove previous bubble layer
+  if (_priceBubbleLayer) {
+    map.removeLayer(_priceBubbleLayer);
+    _priceBubbleLayer = null;
+  }
+
+  const tdGJ = state.taxdefault.geojson;
+  if (!tdGJ || !state.taxdefault.amountField) return;
+  if (map.getZoom() < BUBBLE_MIN_ZOOM) return;
+
+  const af  = state.taxdefault.amountField;
+  const idF = state.taxdefault.idField;
+
+  // Build a set of AINs that pass current filters (if a filtered list was passed)
+  let allowedAins = null;
+  if (filteredFeatures && idF) {
+    allowedAins = new Set(
+      filteredFeatures.map(f => normalizeId((f.properties || {})[idF])).filter(Boolean)
+    );
+  }
+
+  const markers = [];
+
+  (tdGJ.features || []).forEach(f => {
+    const props = f.properties || {};
+    const ain   = idF ? normalizeId(props[idF]) : null;
+
+    // Respect list filters
+    if (allowedAins && ain && !allowedAins.has(ain)) return;
+
+    // Resolve centroid: GeoJSON geometry first, then tile cache
+    let latlng = null;
+    if (f.geometry) {
+      try { latlng = L.geoJSON(f).getBounds().getCenter(); } catch (_) {}
+    }
+    if (!latlng && ain) {
+      const c = _parcelLocationCache.get(ain);
+      if (c) latlng = c;
+    }
+    if (!latlng) return;
+
+    // Get bid amount
+    const bid = parseFloat(String(props[af] || '').replace(/[^\d.]/g, ''));
+    if (isNaN(bid) || bid <= 0) return;
+
+    const marker = L.marker([latlng.lat, latlng.lng], {
+      icon: L.divIcon({
+        className: 'price-bubble',
+        html: `<div class="price-bubble-inner">${fmtBidShort(bid)}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      }),
+      zIndexOffset: 200,
+    });
+
+    marker.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      showParcelModal(f, 'taxdefault');
+      if (ain) scrollToListCard(ain);
+    });
+
+    markers.push(marker);
+  });
+
+  if (markers.length) {
+    _priceBubbleLayer = L.layerGroup(markers);
+    _priceBubbleLayer.addTo(map);
+  }
+}
+
+// Show/hide bubbles when zoom crosses the threshold
+map.on('zoomend', () => buildPriceBubbles());
+
+// ─── Collect all numeric bid values from loaded tax-default parcels ───────────
 function getBidValues() {
   const af = state.taxdefault.amountField;
   if (!af || !state.taxdefault.geojson) return [];
