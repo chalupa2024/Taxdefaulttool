@@ -3335,6 +3335,16 @@ document.getElementById('btn-export').addEventListener('click', exportMatchedCSV
 document.getElementById('btn-export-results').addEventListener('click', exportMatchedCSV);
 
 // Basemap toggle
+// ─── Sidebar collapse toggle ──────────────────────────────────────────────────
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  const sidebar = document.querySelector('.sidebar');
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  // Let the map know its container resized after the CSS transition finishes
+  setTimeout(() => map.invalidateSize(), 270);
+  const btn = document.getElementById('sidebar-toggle');
+  btn.title = isCollapsed ? 'Show setup panel' : 'Hide setup panel';
+});
+
 document.getElementById('btn-basemap-toggle').addEventListener('click', () => {
   state.basemapIdx = (state.basemapIdx + 1) % BASEMAPS.length;
   setBasemap(state.basemapIdx);

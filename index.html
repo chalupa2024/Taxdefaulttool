@@ -28,22 +28,30 @@
   <!-- Header -->
   <header class="app-header">
     <div class="header-left">
-      <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polygon points="3 11 22 2 13 21 11 13 3 11"/>
-      </svg>
-      <div>
-        <h1>Tax Default Parcel Mapper</h1>
-        <p class="header-subtitle">Identify tax-defaulted parcels to pursue</p>
-      </div>
+      <!-- BackLot logo -->
+      <a class="backlot-logo" href="https://backlothq.com" target="_blank" rel="noopener">
+        <svg class="backlot-logo-icon" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0"  y="0"  width="14" height="14" fill="#111827"/>
+          <rect x="16" y="0"  width="14" height="14" fill="#06b6d4"/>
+          <rect x="0"  y="16" width="14" height="14" fill="#111827"/>
+          <rect x="16" y="16" width="14" height="14" fill="#111827"/>
+        </svg>
+        <span class="backlot-wordmark">Back<span>Lot</span></span>
+      </a>
+      <div class="header-divider"></div>
+      <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle setup panel" aria-label="Toggle setup panel">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <h1>Parcel Intelligence</h1>
     </div>
     <div class="header-actions">
       <button id="btn-export" class="btn btn-primary" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Export Results
+        Export
       </button>
       <button id="btn-clear-all" class="btn btn-danger">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-        Clear All
+        Reset
       </button>
     </div>
   </header>

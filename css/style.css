@@ -5,34 +5,37 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --color-bg: #0f1117;
-  --color-surface: #1a1d27;
-  --color-surface-2: #22263a;
-  --color-border: #2d3250;
-  --color-text: #e2e8f0;
-  --color-text-muted: #8892a4;
-  --color-primary: #4f7ef8;
-  --color-primary-hover: #3b6ef0;
-  --color-danger: #ef4444;
+  /* BackLot brand palette */
+  --color-bg:           #f0f4f8;
+  --color-surface:      #ffffff;
+  --color-surface-2:    #f8fafc;
+  --color-border:       #e2e8f0;
+  --color-text:         #111827;
+  --color-text-muted:   #6b7280;
+  --color-primary:      #0066ff;
+  --color-primary-hover:#0052cc;
+  --color-accent:       #06b6d4;   /* teal from BackLot logo */
+  --color-danger:       #ef4444;
   --color-danger-hover: #dc2626;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
+  --color-success:      #16a34a;
+  --color-warning:      #d97706;
 
-  /* Layer colours */
-  --color-county: #64748b;
-  --color-ownership: #60a5fa;
-  --color-conservation: #4ade80;
-  --color-taxdefault: #f97316;
-  --color-matched: #a855f7;
+  /* Map layer colours */
+  --color-county:      #94a3b8;
+  --color-ownership:   #3b82f6;
+  --color-conservation:#22c55e;
+  --color-taxdefault:  #f97316;
+  --color-matched:     #8b5cf6;
 
-  --radius: 8px;
-  --radius-sm: 4px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.45);
+  --radius:    14px;
+  --radius-sm: 8px;
+  --shadow:    0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.14);
 }
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
   font-size: 14px;
   background: var(--color-bg);
   color: var(--color-text);
@@ -44,9 +47,10 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  height: 56px;
+  height: 58px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 var(--color-border);
   flex-shrink: 0;
   z-index: 100;
   position: relative;
@@ -55,18 +59,61 @@ html, body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.header-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--color-primary);
+/* BackLot checkerboard logo icon */
+.backlot-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: inherit;
+}
+.backlot-logo-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.backlot-wordmark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--color-text);
+}
+.backlot-wordmark span { color: var(--color-primary); }
+
+.header-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.sidebar-toggle-btn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .app-header h1 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
   line-height: 1.2;
 }
 
@@ -92,13 +139,22 @@ html, body {
 /* ---- Sidebar ---- */
 .sidebar {
   width: 300px;
-  min-width: 280px;
+  min-width: 300px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  transition: width 0.25s cubic-bezier(0.4,0,0.2,1),
+              min-width 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+.sidebar.collapsed {
+  width: 0;
+  min-width: 0;
+  border-right: none;
+  overflow: hidden;
 }
 
 .sidebar::-webkit-scrollbar { width: 4px; }
@@ -109,7 +165,7 @@ html, body {
 .panel {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  padding: 16px;
+  padding: 14px 16px;
 }
 
 .panel-header {
@@ -117,15 +173,17 @@ html, body {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .panel-header h2 {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   flex: 1;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--color-text);
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
 }
 
 .panel-header .icon {
@@ -147,9 +205,9 @@ html, body {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.1);
-  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: var(--color-success);
+  background: rgba(22,163,74,0.08);
+  border: 1px solid rgba(22,163,74,0.2);
   border-radius: 6px;
   padding: 5px 8px;
   margin-bottom: 8px;
@@ -200,7 +258,7 @@ html, body {
 .upload-zone:hover,
 .upload-zone.dragover {
   border-color: var(--color-primary);
-  background: rgba(79,126,248,0.06);
+  background: rgba(0,102,255,0.05);
 }
 
 .upload-zone svg {
@@ -354,13 +412,13 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  border-radius: 20px;
   border: none;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
   white-space: nowrap;
 }
 
@@ -434,8 +492,8 @@ html, body {
 
 /* ---- Button pulse (ready to run) ---- */
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(79,126,248,0.5); }
-  50%       { box-shadow: 0 0 0 6px rgba(79,126,248,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,102,255,0.45); }
+  50%       { box-shadow: 0 0 0 6px rgba(0,102,255,0); }
 }
 
 .btn-pulse {
@@ -480,7 +538,7 @@ html, body {
   flex: 1;
   min-width: 0;
   height: 100%;
-  background: #1a1d27;
+  background: var(--color-bg);
 }
 
 /* ---- Parcel List Panel ---- */
@@ -921,11 +979,24 @@ html, body {
 /* ---- Parcel Card ---- */
 .parcel-card {
   cursor: pointer;
-  border-bottom: 1px solid var(--color-border);
-  transition: background 0.12s;
+  margin: 10px 10px 0 10px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.18s, transform 0.15s;
 }
-.parcel-card:hover { background: var(--color-surface); }
-.parcel-card.selected { outline: 2px solid #facc15; outline-offset: -2px; background: var(--color-surface); }
+.parcel-card:last-child { margin-bottom: 10px; }
+.parcel-card:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.13);
+  transform: translateY(-2px);
+}
+.parcel-card.selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 3px rgba(0,102,255,0.15);
+}
 
 .card-image-wrap {
   position: relative;
@@ -1063,7 +1134,9 @@ html, body {
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  border-radius: 20px;
+  font-weight: 600;
 }
 .map-toolbar .btn:hover { background: var(--color-surface-2); }
 
@@ -1227,8 +1300,8 @@ html, body {
 .modal {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 480px;
   max-height: 80vh;
