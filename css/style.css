@@ -629,6 +629,69 @@ html, body {
 }
 .list-search-input:focus { border-color: var(--color-accent); }
 
+/* ── List panel filter bar ────────────────────────────────────────────────── */
+.list-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
+.lf-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lf-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.lf-input {
+  width: 80px;
+  padding: 5px 7px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.lf-input-sm { width: 56px; }
+.lf-input:focus, .lf-select:focus { outline: none; border-color: var(--color-accent); }
+.lf-select {
+  padding: 5px 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+  max-width: 130px;
+}
+.lf-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lf-sep { font-size: 11px; color: var(--color-text-muted); }
+.lf-clear-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+.lf-clear-btn:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+
 .parcel-list-cards {
   flex: 1;
   overflow-y: auto;

@@ -20,8 +20,11 @@ const state = {
     tileYearBuiltField: null, // YearBuilt field detected from MVT tile attributes
   },
   filters: {
-    maxBid:   null,   // show parcels with bid <= this (null = no filter)
-    maxAcres: null,   // show parcels with acres <= this (null = no filter)
+    maxBid:       null,   // top-bar + list panel: bid <= this
+    maxAcres:     null,   // top-bar + list panel: acres <= this
+    useType:      '',     // list panel: exact use type match ('' = all)
+    minYearBuilt: null,   // list panel: year built >= this
+    maxYearBuilt: null,   // list panel: year built <= this
   },
   ownership: {
     geojson:   null,   // user's ownership data (may be attribute-only)
@@ -919,7 +922,8 @@ function tryDetectTileFields() {
     sampleKeys: tileFields,
   });
 
-  // Refresh list cards to display the newly-detected tile fields
+  // Refresh list cards and filter dropdowns with newly-detected tile fields
+  populateUseTypeFilter();
   if (state.taxdefault.geojson) refreshListView();
 }
 
@@ -1920,25 +1924,76 @@ function buildListViewFeatures() {
   return tdGJ.features.map(f => ({ ...f }));
 }
 
-// Apply top-bar filters + list search.
+// Apply search + all list-panel filters.
 function applyListFilters(features) {
-  const search = (document.getElementById('list-search').value || '').toLowerCase().trim();
-  const af     = state.taxdefault.amountField;
-  const acreF  = state.county.acreField;
-  const acreC  = state.county.acreConvFactor;
+  const search    = (document.getElementById('list-search').value || '').toLowerCase().trim();
+  const af        = state.taxdefault.amountField;
+  const acreF     = state.county.acreField;
+  const acreC     = state.county.acreConvFactor;
+  const useField  = state.taxdefault.useTypeField  || state.county.tileUseTypeField  || '';
+  const yrField   = state.taxdefault.yearBuiltField || state.county.tileYearBuiltField || '';
+  const idField   = state.taxdefault.idField || '';
 
   return features.filter(f => {
     const p = f.properties || {};
-    if (search && !JSON.stringify(p).toLowerCase().includes(search)) return false;
+
+    // Merge tile props so filters see the same data the cards show
+    const ain = idField ? normalizeId(p[idField] || '') : '';
+    const tp  = (ain && _parcelPropsCache.get(ain)) || {};
+    const m   = Object.keys(tp).length ? { ...tp, ...p } : p;
+
+    if (search && !JSON.stringify(m).toLowerCase().includes(search)) return false;
+
     if (state.filters.maxBid && af) {
-      const v = parseFloat(String(p[af]||'').replace(/[^\d.]/g,''));
+      const v = parseFloat(String(m[af]||'').replace(/[^\d.]/g,''));
       if (!isNaN(v) && v > state.filters.maxBid) return false;
     }
     if (state.filters.maxAcres && acreF) {
-      const v = parseFloat(p[acreF]);
+      const v = parseFloat(m[acreF]);
       if (!isNaN(v) && v * acreC > state.filters.maxAcres) return false;
     }
+    if (state.filters.useType && useField) {
+      const v = String(m[useField] || '').trim();
+      if (v !== state.filters.useType) return false;
+    }
+    if (state.filters.minYearBuilt && yrField) {
+      const v = parseInt(m[yrField]);
+      if (!isNaN(v) && v < state.filters.minYearBuilt) return false;
+    }
+    if (state.filters.maxYearBuilt && yrField) {
+      const v = parseInt(m[yrField]);
+      if (!isNaN(v) && v > state.filters.maxYearBuilt) return false;
+    }
     return true;
+  });
+}
+
+// Populate the Use Type <select> with unique values from loaded parcel data.
+function populateUseTypeFilter() {
+  const sel      = document.getElementById('lf-use-type');
+  if (!sel) return;
+  const useField = state.taxdefault.useTypeField || state.county.tileUseTypeField || '';
+  if (!useField) return;
+
+  const values = new Set();
+  // From tile cache
+  for (const props of _parcelPropsCache.values()) {
+    const v = String(props[useField] || '').trim();
+    if (v) values.add(v);
+  }
+  // From spreadsheet features
+  (state.taxdefault.geojson && state.taxdefault.geojson.features || []).forEach(f => {
+    const v = String((f.properties || {})[useField] || '').trim();
+    if (v) values.add(v);
+  });
+
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All types</option>';
+  [...values].sort().forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    if (v === current) opt.selected = true;
+    sel.appendChild(opt);
   });
 }
 
@@ -2186,6 +2241,47 @@ document.getElementById('btn-list-view').addEventListener('click', () => {
 document.getElementById('btn-close-list').addEventListener('click', () => setListViewOpen(false));
 document.getElementById('list-search').addEventListener('input', refreshListView);
 
+// ─── List panel filters ───────────────────────────────────────────────────────
+
+function updateListFilterClearBtn() {
+  const f = state.filters;
+  const active = f.maxBid || f.maxAcres || f.useType || f.minYearBuilt || f.maxYearBuilt;
+  document.getElementById('lf-clear').style.display = active ? 'inline-block' : 'none';
+}
+
+function syncListFilterInputs() {
+  const f = state.filters;
+  document.getElementById('lf-max-bid').value    = f.maxBid       || '';
+  document.getElementById('lf-max-acres').value  = f.maxAcres     || '';
+  document.getElementById('lf-use-type').value   = f.useType      || '';
+  document.getElementById('lf-year-min').value   = f.minYearBuilt || '';
+  document.getElementById('lf-year-max').value   = f.maxYearBuilt || '';
+  updateListFilterClearBtn();
+}
+
+function onListFilterChange() {
+  state.filters.maxBid       = parseFloat(document.getElementById('lf-max-bid').value)   || null;
+  state.filters.maxAcres     = parseFloat(document.getElementById('lf-max-acres').value) || null;
+  state.filters.useType      = document.getElementById('lf-use-type').value.trim();
+  state.filters.minYearBuilt = parseInt(document.getElementById('lf-year-min').value)    || null;
+  state.filters.maxYearBuilt = parseInt(document.getElementById('lf-year-max').value)    || null;
+  updateListFilterClearBtn();
+  refreshListView();
+}
+
+['lf-max-bid','lf-max-acres','lf-use-type','lf-year-min','lf-year-max'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', onListFilterChange);
+});
+
+document.getElementById('lf-clear').addEventListener('click', () => {
+  state.filters.maxBid = state.filters.maxAcres = null;
+  state.filters.useType = '';
+  state.filters.minYearBuilt = state.filters.maxYearBuilt = null;
+  syncListFilterInputs();
+  refreshListView();
+});
+
 // ─── CSV Export ───────────────────────────────────────────────────────────────
 
 function exportMatchedCSV() {
@@ -2414,7 +2510,8 @@ function applyTaxDefaultData(geojson, skipZoom = false) {
     try { map.fitBounds(state.taxdefault.layer.getBounds(), { padding: [20, 20] }); } catch (e) {}
   }
 
-  // Populate list view automatically (also shows the List button)
+  // Populate list view and filter dropdowns
+  populateUseTypeFilter();
   refreshListView();
 
   // For Mapbox counties: kick off a background ArcGIS attribute fetch so the list

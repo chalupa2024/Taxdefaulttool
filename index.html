@@ -316,6 +316,29 @@
         <div class="list-search-wrap">
           <input type="text" id="list-search" placeholder="Search parcels..." class="list-search-input">
         </div>
+        <div class="list-filters-bar" id="list-filters-bar">
+          <div class="lf-group">
+            <span class="lf-label">Max Bid</span>
+            <input type="number" id="lf-max-bid" class="lf-input" placeholder="Any" min="0" step="1000">
+          </div>
+          <div class="lf-group">
+            <span class="lf-label">Max Acres</span>
+            <input type="number" id="lf-max-acres" class="lf-input" placeholder="Any" min="0" step="0.5">
+          </div>
+          <div class="lf-group">
+            <span class="lf-label">Use Type</span>
+            <select id="lf-use-type" class="lf-select"><option value="">All types</option></select>
+          </div>
+          <div class="lf-group">
+            <span class="lf-label">Year Built</span>
+            <div class="lf-range">
+              <input type="number" id="lf-year-min" class="lf-input lf-input-sm" placeholder="Min" min="1800" max="2030">
+              <span class="lf-sep">–</span>
+              <input type="number" id="lf-year-max" class="lf-input lf-input-sm" placeholder="Max" min="1800" max="2030">
+            </div>
+          </div>
+          <button id="lf-clear" class="lf-clear-btn" style="display:none;">✕ Clear</button>
+        </div>
         <div id="parcel-list-cards" class="parcel-list-cards"></div>
       </div>
     </main>
