@@ -317,9 +317,35 @@
           <input type="text" id="list-search" placeholder="Search parcels..." class="list-search-input">
         </div>
         <div class="list-filters-bar" id="list-filters-bar">
-          <div class="lf-group">
-            <span class="lf-label">Max Bid</span>
-            <input type="number" id="lf-max-bid" class="lf-input" placeholder="Any" min="0" step="1000">
+          <!-- Bid Range — Zillow-style popover -->
+          <div class="lf-group lf-group-pop" id="lf-bid-wrap">
+            <span class="lf-label">Min Bid</span>
+            <button id="lf-bid-btn" class="lf-pill-btn" aria-expanded="false">
+              Any <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg>
+            </button>
+            <div id="lf-bid-popover" class="lf-popover" hidden>
+              <div class="lf-pop-title">Bid Price Range</div>
+              <div class="lf-histogram" id="lf-bid-hist"></div>
+              <div class="lf-slider-container">
+                <div class="lf-slider-track">
+                  <div class="lf-slider-fill" id="lf-bid-fill"></div>
+                </div>
+                <input type="range" id="lf-bid-min-sl" class="lf-slider" value="0">
+                <input type="range" id="lf-bid-max-sl" class="lf-slider" value="100">
+              </div>
+              <div class="lf-pop-inputs">
+                <div class="lf-pop-input-wrap">
+                  <label>Min</label>
+                  <input type="text" id="lf-bid-min-txt" placeholder="No min">
+                </div>
+                <span class="lf-pop-dash">—</span>
+                <div class="lf-pop-input-wrap">
+                  <label>Max</label>
+                  <input type="text" id="lf-bid-max-txt" placeholder="No max">
+                </div>
+              </div>
+              <button id="lf-bid-apply" class="lf-apply-btn">Apply</button>
+            </div>
           </div>
           <div class="lf-group">
             <span class="lf-label">Max Acres</span>
