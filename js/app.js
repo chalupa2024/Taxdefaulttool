@@ -1003,8 +1003,16 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
               fp.PARCEL_NO || fp.Parcel_Number || fp.parcel || ''
             );
             if (!ain) continue;
-            // Always cache the full tile properties (overwrite with fresher data is fine)
+            // Cache tile properties (cap at 5000 entries to bound memory on mobile)
             if (!_parcelPropsCache.has(ain)) {
+              if (_parcelPropsCache.size >= 5000) {
+                // Evict oldest 500 entries
+                let evicted = 0;
+                for (const k of _parcelPropsCache.keys()) {
+                  _parcelPropsCache.delete(k);
+                  if (++evicted >= 500) break;
+                }
+              }
               _parcelPropsCache.set(ain, { ...fp });
             }
             if (_parcelLocationCache.has(ain)) continue;
@@ -1214,7 +1222,6 @@ function buildMapboxVectorLayer(county) {
       },
     },
     interactive: true,
-    getFeatureId: f => normalizeId(f.properties[idField] || f.properties.AIN || f.properties.APN || ''),
     minNativeZoom: 11,
     maxNativeZoom: 16,
     minZoom: 10,
@@ -1243,31 +1250,16 @@ function buildMapboxVectorLayer(county) {
     }
   });
 
-  // After each tile renders, harvest feature properties into the cache.
-  // VectorGrid stores interactive feature layers in this._layers keyed by featureId.
-  // Debounce the list refresh so rapid tile loads only trigger one redraw.
+  // Property cache is populated by the _getVectorTilePromise patch in
+  // setupParcelLocationIndexing. Debounce list refreshes so rapid tile
+  // loads only trigger one redraw.
   let _tileRefreshTimer = null;
   vectorLayer.on('tileload', function() {
-    let added = 0;
-    try {
-      Object.values(this._layers || {}).forEach(layer => {
-        const props = layer.properties;
-        if (!props) return;
-        const ain = normalizeId(props[idField] || props.AIN || props.APN || '');
-        if (ain && !_parcelPropsCache.has(ain)) {
-          _parcelPropsCache.set(ain, { ...props });
-          added++;
-        }
-      });
-    } catch (_) {}
-    if (added > 0) {
-      tryDetectTileFields(); // one-time field name detection + initial refresh
-      // Debounced follow-up refresh so later tiles also update the list
-      clearTimeout(_tileRefreshTimer);
-      _tileRefreshTimer = setTimeout(() => {
-        if (state.taxdefault.geojson) refreshListView();
-      }, 400);
-    }
+    clearTimeout(_tileRefreshTimer);
+    _tileRefreshTimer = setTimeout(() => {
+      tryDetectTileFields();
+      if (state.taxdefault.geojson) refreshListView();
+    }, 500);
   });
 
   vectorLayer.on('click', function(e) {
