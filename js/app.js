@@ -1213,15 +1213,14 @@ function buildMapboxVectorLayer(county) {
         return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.05, color: '#4a9eff', weight: 0.2 };
       },
     },
-    rendererFactory: L.canvas(),  // Canvas is faster than SVG, especially on mobile
     interactive: true,
     getFeatureId: f => normalizeId(f.properties[idField] || f.properties.AIN || f.properties.APN || ''),
-    minNativeZoom: 11,   // Don't request tiles below z11 — tileset has no data there
+    minNativeZoom: 11,
     maxNativeZoom: 16,
-    minZoom: 10,         // Hide layer entirely when zoomed far out
+    minZoom: 10,
     maxZoom: 20,
-    keepBuffer: 1,       // Default is 2 — reduce prefetch radius to save memory on mobile
-    maxTilesInCache: 50, // Cap cached tiles to limit RAM usage
+    keepBuffer: 1,
+    maxTilesInCache: 50,
   });
 
   // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
