@@ -1018,6 +1018,9 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
   let _indexed = 0;
   vectorLayer._getVectorTilePromise = function(...args) {
     return orig(...args).then(vt => {
+      // On mobile skip all per-tile JS processing — tile rendering itself is
+      // already the bottleneck; don't add attribute caching on top of it.
+      if (isMobile()) return vt;
       try {
         const tileLayer = vt.layers && (vt.layers[county.mapboxLayer] || Object.values(vt.layers)[0]);
         if (!tileLayer) return vt;
@@ -1243,24 +1246,27 @@ function buildMapboxVectorLayer(county) {
   const layerName = county.mapboxLayer;
   const idField = county.apnField || 'AIN';
 
+  // On mobile: static style + non-interactive to avoid running JS per-feature
+  // and creating canvas hit-paths for every parcel. Crash trigger eliminated.
+  const mobileStyle = { fill: true, fillColor: '#4a9eff', fillOpacity: 0.06, color: '#4a9eff', weight: 0.3 };
+  const desktopStyleFn = function(properties) {
+    const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
+    const isSelected = state.selectedAin && ain === state.selectedAin;
+    const isDefault  = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
+    if (isSelected) return { fill: true, fillColor: '#facc15', fillOpacity: 0.55, color: '#facc15', weight: 2 };
+    if (isDefault)  return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.4, color: STYLE_TAXDEFAULT.color, weight: 0.8 };
+    return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.05, color: '#4a9eff', weight: 0.2 };
+  };
+
   const vectorLayer = L.vectorGrid.protobuf(tileUrl, {
-    vectorTileLayerStyles: {
-      [layerName]: function(properties) {
-        const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
-        const isSelected = state.selectedAin && ain === state.selectedAin;
-        const isDefault  = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
-        if (isSelected) return { fill: true, fillColor: '#facc15', fillOpacity: 0.55, color: '#facc15', weight: 2 };
-        if (isDefault)  return { fill: true, fillColor: STYLE_TAXDEFAULT.color, fillOpacity: 0.4, color: STYLE_TAXDEFAULT.color, weight: 0.8 };
-        return { fill: true, fillColor: '#4a9eff', fillOpacity: 0.05, color: '#4a9eff', weight: 0.2 };
-      },
-    },
-    interactive: true,
+    vectorTileLayerStyles: { [layerName]: isMobile() ? mobileStyle : desktopStyleFn },
+    interactive: !isMobile(),   // false on mobile = no per-feature canvas hit-paths
     minNativeZoom: 11,
-    maxNativeZoom: 16,
+    maxNativeZoom: isMobile() ? 14 : 16,
     minZoom: 10,
     maxZoom: 20,
-    keepBuffer: 1,
-    maxTilesInCache: 50,
+    keepBuffer: isMobile() ? 0 : 1,
+    maxTilesInCache: isMobile() ? 10 : 50,
   });
 
   // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
