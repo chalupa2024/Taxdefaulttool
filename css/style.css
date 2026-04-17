@@ -1676,12 +1676,14 @@ html, body {
 /* ---- Responsive — Mobile ---- */
 @media (max-width: 640px) {
 
-  /* Hide subtitle in header */
+  /* Hide subtitle, page title and sidebar toggle on mobile — bottom nav handles nav */
   .header-subtitle { display: none; }
+  .app-header h1 { display: none; }
+  .header-divider { display: none; }
+  .sidebar-toggle-btn { display: none; }
 
-  /* Compact header */
+  /* Compact header — just logo + action buttons */
   .app-header { padding: 0 12px; height: 52px; }
-  .app-header h1 { font-size: 15px; }
   .header-icon { width: 20px; height: 20px; }
   .btn { font-size: 12px; padding: 6px 10px; }
 
