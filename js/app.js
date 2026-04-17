@@ -1033,18 +1033,21 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
               fp.PARCEL_NO || fp.Parcel_Number || fp.parcel || ''
             );
             if (!ain) continue;
-            // Cache tile properties (cap at 5000 entries to bound memory on mobile)
+            // Cache tile properties — lower cap on mobile to prevent OOM crashes
+            const propsCap   = isMobile() ? 800  : 5000;
+            const propsEvict = isMobile() ? 200  : 500;
             if (!_parcelPropsCache.has(ain)) {
-              if (_parcelPropsCache.size >= 5000) {
-                // Evict oldest 500 entries
+              if (_parcelPropsCache.size >= propsCap) {
                 let evicted = 0;
                 for (const k of _parcelPropsCache.keys()) {
                   _parcelPropsCache.delete(k);
-                  if (++evicted >= 500) break;
+                  if (++evicted >= propsEvict) break;
                 }
               }
               _parcelPropsCache.set(ain, { ...fp });
             }
+            // Skip expensive geometry centroid calculation on mobile
+            if (isMobile()) continue;
             if (_parcelLocationCache.has(ain)) continue;
             const geom = feat.loadGeometry(); // array of rings: [{x,y}]
             if (!geom || !geom.length) continue;
@@ -1286,13 +1289,14 @@ function buildMapboxVectorLayer(county) {
   let _tileRefreshTimer = null;
   vectorLayer.on('tileload', function() {
     clearTimeout(_tileRefreshTimer);
+    // Longer debounce on mobile so rapid pan/zoom doesn't queue multiple heavy redraws
     _tileRefreshTimer = setTimeout(() => {
       tryDetectTileFields();
       if (state.taxdefault.geojson) {
         refreshListView();
-        buildPriceBubbles();
+        if (!isMobile()) buildPriceBubbles();
       }
-    }, 500);
+    }, isMobile() ? 1500 : 500);
   });
 
   vectorLayer.on('click', function(e) {
@@ -2495,6 +2499,10 @@ function fmtBidShort(v) {
 // parcel that has a known centroid. Pass the already-filtered feature array
 // from refreshListView so bubbles stay in sync with list filters.
 function buildPriceBubbles(filteredFeatures) {
+  // Price bubbles are skipped on mobile — creating/destroying hundreds of DOM
+  // markers on every zoom triggers OOM crashes in mobile Safari/Chrome.
+  if (isMobile()) return;
+
   // Remove previous bubble layer
   if (_priceBubbleLayer) {
     map.removeLayer(_priceBubbleLayer);
