@@ -286,7 +286,13 @@
       <div id="parcel-list-panel" class="parcel-list-panel" style="display:none;">
         <div class="list-panel-header">
           <span id="list-panel-count">0 parcels</span>
-          <button id="btn-close-list" class="btn-icon" title="Close list">✕</button>
+          <div class="list-panel-header-actions">
+            <button id="btn-export-list" class="btn btn-sm btn-primary list-export-btn" title="Export CSV" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export
+            </button>
+            <button id="btn-close-list" class="btn-icon" title="Close list">✕</button>
+          </div>
         </div>
         <div class="list-search-wrap">
           <input type="text" id="list-search" placeholder="Search parcels..." class="list-search-input">
@@ -387,18 +393,23 @@
 
   <!-- Mobile bottom navigation -->
   <nav class="mobile-nav" id="mobile-nav">
-    <button class="mobile-nav-btn active" data-tab="setup" onclick="setMobileTab('setup')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-      <span>Setup</span>
+    <button class="mobile-nav-btn active" data-tab="data" onclick="setMobileTab('data')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Data</span>
     </button>
     <button class="mobile-nav-btn" data-tab="map" onclick="setMobileTab('map')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
       <span>Map</span>
     </button>
-    <button class="mobile-nav-btn" data-tab="results" onclick="setMobileTab('results')" id="mobile-results-tab">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      <span>Results</span>
+    <button class="mobile-nav-btn" data-tab="parcels" onclick="setMobileTab('parcels')" id="mobile-parcels-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>Parcels</span>
       <span class="mobile-results-badge" id="mobile-results-badge" style="display:none;"></span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="saved" onclick="setMobileTab('saved')" id="mobile-saved-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span>Saved</span>
+      <span class="mobile-saved-badge" id="mobile-saved-badge" style="display:none;"></span>
     </button>
   </nav>
 </body>

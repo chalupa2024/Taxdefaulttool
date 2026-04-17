@@ -1603,6 +1603,7 @@ function renderResultsList(features, filter = '') {
   countEl.textContent      = features.length;
   toolbarCount.textContent = features.length;
   document.getElementById('btn-export').disabled = features.length === 0;
+  document.getElementById('btn-export-list').disabled = features.length === 0;
 
   // Sort
   const sortVal = document.getElementById('results-sort').value;
@@ -2294,6 +2295,7 @@ function renderParcelListView(features, totalCount) {
             starBtn.title = 'Remove from saved';
           }
           saveStars();
+          updateSavedBadge();
           updateListFilterClearBtn();
           // If stars-only filter is on, re-render to remove/add this card
           if (state.filters.starsOnly) refreshListView();
@@ -2423,7 +2425,12 @@ function setListViewOpen(open) {
 document.getElementById('btn-list-view').addEventListener('click', () => {
   setListViewOpen(document.getElementById('parcel-list-panel').style.display === 'none');
 });
-document.getElementById('btn-close-list').addEventListener('click', () => setListViewOpen(false));
+document.getElementById('btn-close-list').addEventListener('click', () => {
+  setListViewOpen(false);
+  if (isMobile()) setMobileTab('map');
+});
+
+document.getElementById('btn-export-list').addEventListener('click', exportMatchedCSV);
 document.getElementById('list-search').addEventListener('input', refreshListView);
 
 // ─── List panel filters ───────────────────────────────────────────────────────
@@ -3396,6 +3403,7 @@ document.getElementById('btn-clear-all').addEventListener('click', () => {
   document.getElementById('results-panel').style.display = 'none';
   document.getElementById('btn-show-results').style.display = 'none';
   document.getElementById('btn-export').disabled = true;
+  document.getElementById('btn-export-list').disabled = true;
   document.getElementById('btn-run-match').disabled = true;
   document.getElementById('match-status').textContent = '';
   document.getElementById('match-status').className = 'match-status';
@@ -3427,33 +3435,54 @@ function isMobile() { return window.innerWidth <= 640; }
 window.setMobileTab = function(tab) {
   if (!isMobile()) return;
 
-  const sidebar   = document.querySelector('.sidebar');
-  const mapContainer = document.querySelector('.map-container');
+  const sidebar      = document.querySelector('.sidebar');
   const resultsPanel = document.getElementById('results-panel');
-  const btns      = document.querySelectorAll('.mobile-nav-btn');
+  const listPanel    = document.getElementById('parcel-list-panel');
+  const btns         = document.querySelectorAll('.mobile-nav-btn');
 
-  // Update active button
+  // Update active button highlight
   btns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
 
-  // Setup tab — show sidebar overlay, hide results
-  if (tab === 'setup') {
+  // Data tab — open setup sidebar
+  if (tab === 'data') {
     sidebar.classList.add('mobile-open');
-    if (resultsPanel.style.display !== 'none') resultsPanel.style.display = 'none';
+    resultsPanel.style.display = 'none';
+    if (listPanel) listPanel.style.display = 'none';
   }
 
-  // Map tab — hide sidebar, hide results panel
+  // Map tab — hide everything, show map
   if (tab === 'map') {
     sidebar.classList.remove('mobile-open');
     resultsPanel.style.display = 'none';
-    // Trigger Leaflet resize since the map container may have changed size
+    if (listPanel) listPanel.style.display = 'none';
     setTimeout(() => map.invalidateSize(), 50);
   }
 
-  // Results tab — hide sidebar, show results panel
-  if (tab === 'results') {
+  // Parcels tab — show full tax-default list (no stars filter)
+  if (tab === 'parcels') {
     sidebar.classList.remove('mobile-open');
-    if (state.matched.length) {
-      resultsPanel.style.display = 'flex';
+    resultsPanel.style.display = 'none';
+    state.filters.starsOnly = false;
+    const toggle = document.getElementById('lf-stars-toggle');
+    if (toggle) toggle.classList.remove('active');
+    if (state.taxdefault.geojson) {
+      setListViewOpen(true);
+    } else if (listPanel) {
+      listPanel.style.display = 'none';
+    }
+  }
+
+  // Saved tab — show list filtered to starred parcels only
+  if (tab === 'saved') {
+    sidebar.classList.remove('mobile-open');
+    resultsPanel.style.display = 'none';
+    state.filters.starsOnly = true;
+    const toggle = document.getElementById('lf-stars-toggle');
+    if (toggle) toggle.classList.add('active');
+    if (state.taxdefault.geojson) {
+      setListViewOpen(true);
+    } else if (listPanel) {
+      listPanel.style.display = 'none';
     }
   }
 };
@@ -3463,17 +3492,26 @@ function mobileGoToMap() {
   if (isMobile()) setMobileTab('map');
 }
 
-// Auto-switch to Results tab and update badge when analysis completes
+// Update Parcels badge and auto-switch to Parcels tab when tax-default data loads
 function mobileShowResults(count) {
   if (!isMobile()) return;
   const badge = document.getElementById('mobile-results-badge');
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count;
     badge.style.display = 'flex';
-    setMobileTab('results');
+    setMobileTab('parcels');
   } else {
     badge.style.display = 'none';
   }
+}
+
+// Keep Saved badge in sync whenever stars change
+function updateSavedBadge() {
+  const badge = document.getElementById('mobile-saved-badge');
+  if (!badge) return;
+  const n = _starredAins.size;
+  badge.textContent = n > 99 ? '99+' : n;
+  badge.style.display = n > 0 ? 'flex' : 'none';
 }
 
 // ─── Initialization ───────────────────────────────────────────────────────────
