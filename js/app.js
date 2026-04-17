@@ -1264,7 +1264,7 @@ function buildMapboxVectorLayer(county) {
     minNativeZoom: 11,
     maxNativeZoom: isMobile() ? 14 : 16,
     minZoom: 10,
-    maxZoom: 20,
+    maxZoom: isMobile() ? 15 : 20,  // stop rendering grid above z15 on mobile to prevent OOM
     keepBuffer: isMobile() ? 0 : 1,
     maxTilesInCache: isMobile() ? 10 : 50,
   });
