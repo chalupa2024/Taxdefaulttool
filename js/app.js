@@ -1246,10 +1246,10 @@ function buildMapboxVectorLayer(county) {
   const layerName = county.mapboxLayer;
   const idField = county.apnField || 'AIN';
 
-  // On mobile: static style + non-interactive to avoid running JS per-feature
-  // and creating canvas hit-paths for every parcel. Crash trigger eliminated.
-  const mobileStyle = { fill: true, fillColor: '#4a9eff', fillOpacity: 0.06, color: '#4a9eff', weight: 0.3 };
-  const desktopStyleFn = function(properties) {
+  // Style function runs for every feature but ainSet.has() is O(1) — not the crash cause.
+  // The crash was interactive:true (canvas hit-paths per feature) + tile processing, both
+  // now disabled on mobile. Keep the full style fn so tax-default parcels highlight correctly.
+  const tileStyleFn = function(properties) {
     const ain = normalizeId(properties[idField] || properties.AIN || properties.APN || '');
     const isSelected = state.selectedAin && ain === state.selectedAin;
     const isDefault  = state.taxdefault.ainSet && state.taxdefault.ainSet.has(ain);
@@ -1259,12 +1259,12 @@ function buildMapboxVectorLayer(county) {
   };
 
   const vectorLayer = L.vectorGrid.protobuf(tileUrl, {
-    vectorTileLayerStyles: { [layerName]: isMobile() ? mobileStyle : desktopStyleFn },
-    interactive: !isMobile(),   // false on mobile = no per-feature canvas hit-paths
+    vectorTileLayerStyles: { [layerName]: tileStyleFn },
+    interactive: !isMobile(),   // false on mobile = no per-feature canvas hit-paths (was the crash cause)
     minNativeZoom: 11,
     maxNativeZoom: isMobile() ? 14 : 16,
     minZoom: 10,
-    maxZoom: isMobile() ? 15 : 20,  // stop rendering grid above z15 on mobile to prevent OOM
+    maxZoom: 20,
     keepBuffer: isMobile() ? 0 : 1,
     maxTilesInCache: isMobile() ? 10 : 50,
   });
