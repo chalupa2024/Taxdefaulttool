@@ -136,10 +136,197 @@ html, body {
   overflow: hidden;
 }
 
-/* ---- Sidebar — fixed floating overlay on desktop ---- */
-.sidebar {
+/* ═══════════════════════════════════════════════════════════
+   Icon Rail (Acres.com-style dark left nav)
+   ═══════════════════════════════════════════════════════════ */
+.icon-rail {
   position: fixed;
   left: 0;
+  top: 58px;
+  width: 52px;
+  height: calc(100vh - 58px);
+  background: #111827;
+  z-index: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 2px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.rail-btn {
+  position: relative;
+  width: 44px;
+  min-height: 50px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+}
+.rail-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.88);
+}
+.rail-btn.active {
+  background: rgba(0,102,255,0.22);
+  color: #60a5fa;
+}
+.rail-btn svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+.rail-btn > span:first-of-type {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+/* PRO badge — orange chip on the icon */
+.rail-btn-pro { opacity: 0.7; }
+.rail-btn-pro:hover { opacity: 1; }
+.rail-pro-badge {
+  position: absolute;
+  top: 5px;
+  right: 3px;
+  font-size: 7px;
+  font-weight: 800;
+  background: var(--color-warning);
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 3px;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.rail-divider {
+  width: 32px;
+  height: 1px;
+  background: rgba(255,255,255,0.10);
+  margin: 6px 0;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Pro Upgrade Modal
+   ═══════════════════════════════════════════════════════════ */
+.pro-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.pro-modal {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  padding: 32px 28px 28px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+}
+.pro-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pro-modal-close:hover { background: var(--color-border); color: var(--color-text); }
+.pro-modal-lock {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(0,102,255,0.10);
+  border: 2px solid rgba(0,102,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: var(--color-primary);
+}
+.pro-modal-lock svg { width: 24px; height: 24px; }
+.pro-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.pro-modal-desc {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+.pro-features-list {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pro-features-list li {
+  font-size: 13px;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pro-features-list li::before {
+  content: '✓';
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(22,163,74,0.12);
+  color: var(--color-success);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pro-modal-cta {
+  width: 100%;
+  justify-content: center;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+}
+
+/* ---- Sidebar — fixed floating overlay on desktop, sits right of icon rail ---- */
+.sidebar {
+  position: fixed;
+  left: 52px;
   top: 58px;
   height: calc(100vh - 58px);
   width: 300px;
@@ -156,7 +343,7 @@ html, body {
               box-shadow 0.28s ease;
 }
 .sidebar.collapsed {
-  transform: translateX(-305px);
+  transform: translateX(-310px);
   box-shadow: none;
 }
 
@@ -1837,12 +2024,14 @@ html, body {
 /* ---- Responsive — Mobile ---- */
 @media (max-width: 640px) {
 
-  /* Hide subtitle, page title, sidebar toggle and header Export on mobile */
+  /* Hide subtitle, page title, sidebar toggle, header Export, and icon rail on mobile */
   .header-subtitle { display: none; }
   .app-header h1 { display: none; }
   .header-divider { display: none; }
   .sidebar-toggle-btn { display: none; }
   #btn-export { display: none; }
+  .icon-rail { display: none; }
+  .pro-modal-overlay .pro-modal { border-radius: 16px 16px 0 0; margin-bottom: 0; }
 
   /* Compact header — just logo + Reset button */
   .app-header { padding: 0 12px; height: 52px; }

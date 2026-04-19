@@ -123,17 +123,15 @@ const map = L.map('map', {
   zoom: 6,
   minZoom: 5,
   zoomControl: true,
-  // Smoother zoom: fractional snap so the animated step is half a level
-  zoomSnap: 0.5,
-  zoomDelta: 0.5,
-  // Require more scroll-wheel pixels per zoom level — feels more controlled
-  wheelPxPerZoomLevel: 80,
-  // Allow smooth animated transition for bigger zoom jumps (default 4)
-  zoomAnimationThreshold: 8,
-  // Inertia tuning — natural deceleration for panning
+  // Natural single-level snap (0.5 felt sluggish — double clicks to zoom one level)
+  zoomSnap: 1,
+  zoomDelta: 1,
+  // Default wheel sensitivity (80 felt unresponsive)
+  wheelPxPerZoomLevel: 60,
+  // Pan inertia — smooth deceleration after release
   inertia: true,
-  inertiaDeceleration: 2500,
-  inertiaMaxSpeed: 1200,
+  inertiaDeceleration: 2800,
+  inertiaMaxSpeed: 1400,
 });
 
 map.zoomControl.setPosition('bottomright');
@@ -1289,12 +1287,6 @@ function buildMapboxVectorLayer(county) {
     maxZoom: 20,
     keepBuffer: isMobile() ? 0 : 3,
     maxTilesInCache: isMobile() ? 10 : 200,
-    // KEY: don't try to load new vector tiles during zoom animation — let the
-    // existing tiles scale smoothly, then load crisp tiles once zoom settles.
-    // This eliminates the "half-loaded tile pop" visible mid-zoom.
-    updateWhenZooming: false,
-    // Only refresh tiles after the map stops moving, not during every pan frame
-    updateWhenIdle: !isMobile(),
   });
 
   // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
@@ -3416,6 +3408,47 @@ document.getElementById('sidebar-toggle').addEventListener('click', () => {
 
 document.getElementById('sidebar-edge-tab').addEventListener('click', () => {
   setSidebarCollapsed(false);
+});
+
+// ─── Icon Rail ────────────────────────────────────────────────────────────────
+function setRailActive(id) {
+  document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(id);
+  if (btn) btn.classList.add('active');
+}
+
+document.getElementById('rail-data').addEventListener('click', () => {
+  setRailActive('rail-data');
+  setSidebarCollapsed(false);
+});
+
+document.getElementById('rail-parcels').addEventListener('click', () => {
+  setRailActive('rail-parcels');
+  setSidebarCollapsed(true);   // collapse setup sidebar to maximize map
+  if (state.taxdefault.geojson) {
+    setListViewOpen(true);
+  } else {
+    // Guide user to load data first
+    setSidebarCollapsed(false);
+    setRailActive('rail-data');
+  }
+});
+
+// Pro feature buttons — show upgrade modal
+['rail-watchlist', 'rail-insights', 'rail-valuation'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    const btn = document.getElementById(id);
+    document.getElementById('pro-modal-title').textContent = btn.dataset.proTitle || 'Pro Feature';
+    document.getElementById('pro-modal-desc').textContent  = btn.dataset.proDesc  || 'Upgrade to BackLot Pro to unlock this feature.';
+    document.getElementById('pro-modal-overlay').style.display = 'flex';
+  });
+});
+
+document.getElementById('pro-modal-close').addEventListener('click', () => {
+  document.getElementById('pro-modal-overlay').style.display = 'none';
+});
+document.getElementById('pro-modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) document.getElementById('pro-modal-overlay').style.display = 'none';
 });
 
 document.getElementById('btn-basemap-toggle').addEventListener('click', () => {
