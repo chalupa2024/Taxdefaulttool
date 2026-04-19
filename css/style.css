@@ -136,10 +136,14 @@ html, body {
   overflow: hidden;
 }
 
-/* ---- Sidebar ---- */
+/* ---- Sidebar — fixed floating overlay on desktop ---- */
 .sidebar {
+  position: fixed;
+  left: 0;
+  top: 58px;
+  height: calc(100vh - 58px);
   width: 300px;
-  min-width: 300px;
+  z-index: 300;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
@@ -147,14 +151,13 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  transition: width 0.25s cubic-bezier(0.4,0,0.2,1),
-              min-width 0.25s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.10);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1),
+              box-shadow 0.28s ease;
 }
 .sidebar.collapsed {
-  width: 0;
-  min-width: 0;
-  border-right: none;
-  overflow: hidden;
+  transform: translateX(-305px);
+  box-shadow: none;
 }
 
 .sidebar::-webkit-scrollbar { width: 4px; }
@@ -1151,22 +1154,32 @@ html, body {
 /* ---- Map Toolbar ---- */
 .map-toolbar {
   position: absolute;
-  bottom: 28px;
-  left: 12px;
+  bottom: 40px;
+  right: 14px;
   z-index: 500;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
 }
 
 .map-toolbar .btn {
-  background: var(--color-surface);
+  background: rgba(255,255,255,0.96);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+  border-radius: 22px;
   font-weight: 600;
+  font-size: 12px;
+  padding: 7px 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  white-space: nowrap;
 }
-.map-toolbar .btn:hover { background: var(--color-surface-2); }
+.map-toolbar .btn:hover {
+  background: rgba(255,255,255,1);
+  box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+}
 
 /* ---- Results Panel (overlay) ---- */
 .results-panel {
@@ -1692,9 +1705,120 @@ html, body {
   background: var(--color-border);
 }
 
+/* ---- Sidebar edge tab (opens sidebar when collapsed) ---- */
+.sidebar-edge-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 299;
+  background: rgba(255,255,255,0.96);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  width: 22px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.10);
+  color: var(--color-text-muted);
+  padding: 0;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.sidebar-edge-tab:hover {
+  background: #fff;
+  color: var(--color-primary);
+  box-shadow: 3px 0 14px rgba(0,0,0,0.15);
+}
+
+/* ---- County name badge (floating pill, top-center of map, like Regrid) ---- */
+.map-county-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  padding: 7px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.14);
+  pointer-events: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.map-county-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+}
+
+/* ---- Zoom hint toast (bottom-center, like Regrid) ---- */
+.map-zoom-hint {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  background: rgba(15,15,20,0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 24px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #facc15;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.28);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: zoom-hint-pulse 2.4s ease-in-out infinite;
+}
+@keyframes zoom-hint-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* ---- Tax Default card status chip ---- */
+.card-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 0 12px;
+}
+.card-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 10px;
+}
+.card-chip-taxdefault {
+  background: rgba(249,115,22,0.12);
+  color: var(--color-taxdefault);
+  border: 1px solid rgba(249,115,22,0.28);
+}
+
 /* ---- Responsive — Tablet ---- */
 @media (max-width: 800px) {
-  .sidebar { width: 260px; min-width: 240px; }
+  .sidebar { width: 260px; }
   .results-panel { width: calc(100vw - 280px); min-width: 220px; }
 }
 
@@ -1809,7 +1933,12 @@ html, body {
   #modal-close { width: 44px; height: 44px; font-size: 20px; display: flex; align-items: center; justify-content: center; margin: -6px -6px -6px auto; border-radius: 50%; background: var(--color-border); }
 
   /* Map toolbar repositioned above mobile nav */
-  .map-toolbar { bottom: 68px; }
+  .map-toolbar { bottom: 68px; right: 10px; flex-direction: column; align-items: flex-end; }
+
+  /* Hide desktop-only map chrome on mobile */
+  .sidebar-edge-tab { display: none !important; }
+  .map-county-badge { top: 8px; font-size: 12px; padding: 5px 14px; }
+  .map-zoom-hint { bottom: 130px; }
 
   /* Bottom nav visible on mobile */
   .mobile-nav {

@@ -1190,6 +1190,7 @@ async function loadCountyFromURL(county) {
 
     addCountyLayer(gj);
     updateBadge('county', count);
+    setMapCountyBadge(county.name + ' County');
 
     await loadCountyBoundary(county);
 
@@ -1368,6 +1369,7 @@ async function loadCountyFromMapbox(county) {
     document.getElementById('county-controls').style.display = 'flex';
     document.getElementById('drop-county').classList.add('loaded');
     updateBadge('county', '~2.4M');
+    setMapCountyBadge(county.name + ' County, CA');
 
     checkRunMatchEnabled();
     renderCountyGrid(county.id);
@@ -2247,6 +2249,9 @@ function renderParcelListView(features, totalCount) {
         <button class="card-star-btn${isStarred ? ' starred' : ''}" data-ain="${ain_norm || ''}" title="${isStarred ? 'Remove from saved' : 'Save parcel'}" aria-label="Save parcel">
           ${isStarred ? '★' : '☆'}
         </button>
+      </div>
+      <div class="card-chip-row">
+        <span class="card-chip card-chip-taxdefault">Tax Default</span>
       </div>
       <div class="card-body">
         <div class="card-stats">
@@ -3357,13 +3362,23 @@ document.getElementById('btn-export-results').addEventListener('click', exportMa
 
 // Basemap toggle
 // ─── Sidebar collapse toggle ──────────────────────────────────────────────────
+function setSidebarCollapsed(collapsed) {
+  const sidebar = document.querySelector('.sidebar');
+  const edgeTab = document.getElementById('sidebar-edge-tab');
+  const btn = document.getElementById('sidebar-toggle');
+  sidebar.classList.toggle('collapsed', collapsed);
+  if (edgeTab && !isMobile()) edgeTab.style.display = collapsed ? 'flex' : 'none';
+  if (btn) btn.title = collapsed ? 'Show setup panel' : 'Hide setup panel';
+}
+
 document.getElementById('sidebar-toggle').addEventListener('click', () => {
   const sidebar = document.querySelector('.sidebar');
-  const isCollapsed = sidebar.classList.toggle('collapsed');
-  // Let the map know its container resized after the CSS transition finishes
-  setTimeout(() => map.invalidateSize(), 270);
-  const btn = document.getElementById('sidebar-toggle');
-  btn.title = isCollapsed ? 'Show setup panel' : 'Hide setup panel';
+  const isCollapsed = !sidebar.classList.contains('collapsed');
+  setSidebarCollapsed(isCollapsed);
+});
+
+document.getElementById('sidebar-edge-tab').addEventListener('click', () => {
+  setSidebarCollapsed(false);
 });
 
 document.getElementById('btn-basemap-toggle').addEventListener('click', () => {
@@ -3513,6 +3528,24 @@ function updateSavedBadge() {
   badge.textContent = n > 99 ? '99+' : n;
   badge.style.display = n > 0 ? 'flex' : 'none';
 }
+
+// ─── County map badge (floating pill at top-center, like Regrid) ─────────────
+function setMapCountyBadge(name) {
+  const el = document.getElementById('map-county-badge');
+  if (!el) return;
+  el.textContent = name;
+  el.style.display = name ? 'flex' : 'none';
+}
+
+// ─── Zoom hint toast ("Zoom in to see parcels", like Regrid) ─────────────────
+function updateZoomHint() {
+  const hint = document.getElementById('map-zoom-hint');
+  if (!hint) return;
+  const countyLoaded = !!(state.county.catalog);
+  hint.style.display = (countyLoaded && map.getZoom() < 12) ? 'flex' : 'none';
+}
+
+map.on('zoomend', updateZoomHint);
 
 // ─── Initialization ───────────────────────────────────────────────────────────
 renderCountyGrid();
