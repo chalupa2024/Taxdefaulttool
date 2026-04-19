@@ -544,6 +544,15 @@ html, body {
   background: var(--color-bg);
 }
 
+/* Smooth tile fade-in — new tiles appear gracefully instead of popping */
+.leaflet-tile {
+  transition: opacity 0.18s ease-in !important;
+}
+/* Suppress Leaflet's default abrupt tile swap during zoom animation */
+.leaflet-zoom-animated .leaflet-tile-container {
+  will-change: transform;
+}
+
 /* ---- Parcel List Panel ---- */
 .parcel-list-panel {
   width: 380px;

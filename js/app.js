@@ -121,8 +121,19 @@ const COUNTY_CATALOG = {
 const map = L.map('map', {
   center: [37.5, -120.5],
   zoom: 6,
-  minZoom: 5,   // Prevent zooming out so far tiles spam 404s on mobile
+  minZoom: 5,
   zoomControl: true,
+  // Smoother zoom: fractional snap so the animated step is half a level
+  zoomSnap: 0.5,
+  zoomDelta: 0.5,
+  // Require more scroll-wheel pixels per zoom level — feels more controlled
+  wheelPxPerZoomLevel: 80,
+  // Allow smooth animated transition for bigger zoom jumps (default 4)
+  zoomAnimationThreshold: 8,
+  // Inertia tuning — natural deceleration for panning
+  inertia: true,
+  inertiaDeceleration: 2500,
+  inertiaMaxSpeed: 1200,
 });
 
 map.zoomControl.setPosition('bottomright');
@@ -130,7 +141,13 @@ map.zoomControl.setPosition('bottomright');
 function setBasemap(idx) {
   if (basemapLayer) map.removeLayer(basemapLayer);
   const bm = BASEMAPS[idx];
-  basemapLayer = L.tileLayer(bm.url, { attribution: bm.attribution, maxZoom: 20 });
+  basemapLayer = L.tileLayer(bm.url, {
+    attribution: bm.attribution,
+    maxZoom: 20,
+    keepBuffer: 4,          // pre-render extra surrounding tiles for pan smoothness
+    updateWhenIdle: false,  // load tiles during pan, not just after stop
+    crossOrigin: true,      // enables browser disk-caching of tile images
+  });
   basemapLayer.addTo(map);
   document.getElementById('btn-basemap-toggle').textContent =
     BASEMAPS[(idx + 1) % BASEMAPS.length].name;
@@ -1265,13 +1282,19 @@ function buildMapboxVectorLayer(county) {
 
   const vectorLayer = L.vectorGrid.protobuf(tileUrl, {
     vectorTileLayerStyles: { [layerName]: tileStyleFn },
-    interactive: !isMobile(),   // false on mobile = no per-feature canvas hit-paths (was the crash cause)
+    interactive: !isMobile(),
     minNativeZoom: 11,
     maxNativeZoom: isMobile() ? 14 : 16,
     minZoom: 10,
     maxZoom: 20,
-    keepBuffer: isMobile() ? 0 : 3,    // prefetch more surrounding tiles so panning doesn't hit misses
-    maxTilesInCache: isMobile() ? 10 : 200, // larger cache = fewer reloads during scrolling
+    keepBuffer: isMobile() ? 0 : 3,
+    maxTilesInCache: isMobile() ? 10 : 200,
+    // KEY: don't try to load new vector tiles during zoom animation — let the
+    // existing tiles scale smoothly, then load crisp tiles once zoom settles.
+    // This eliminates the "half-loaded tile pop" visible mid-zoom.
+    updateWhenZooming: false,
+    // Only refresh tiles after the map stops moving, not during every pan frame
+    updateWhenIdle: !isMobile(),
   });
 
   // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
