@@ -1026,7 +1026,11 @@ function setupParcelLocationIndexing(vectorLayer, county, idField) {
         if (!tileLayer) return vt;
         const coords = args[0]; // {x, y, z}
         const n = Math.pow(2, coords.z);
-        for (let i = 0; i < tileLayer.length; i++) {
+        // Cap per-tile processing: low-zoom tiles can have 1000+ features and
+        // block the main thread. We only need enough to populate the caches —
+        // the style function handles ALL features regardless of this cap.
+        const featureCap = 700;
+        for (let i = 0; i < Math.min(tileLayer.length, featureCap); i++) {
           try {
             const feat = tileLayer.feature(i);
             // Try every common APN/AIN field name so tiles with non-standard schemas still cache
@@ -1266,8 +1270,8 @@ function buildMapboxVectorLayer(county) {
     maxNativeZoom: isMobile() ? 14 : 16,
     minZoom: 10,
     maxZoom: 20,
-    keepBuffer: isMobile() ? 0 : 1,
-    maxTilesInCache: isMobile() ? 10 : 50,
+    keepBuffer: isMobile() ? 0 : 3,    // prefetch more surrounding tiles so panning doesn't hit misses
+    maxTilesInCache: isMobile() ? 10 : 200, // larger cache = fewer reloads during scrolling
   });
 
   // Detect 404 tile errors (tileset deleted/renamed in Mapbox Studio) and warn once
@@ -1291,19 +1295,29 @@ function buildMapboxVectorLayer(county) {
   });
 
   // Property cache is populated by the _getVectorTilePromise patch in
-  // setupParcelLocationIndexing. Debounce list refreshes so rapid tile
-  // loads only trigger one redraw.
-  let _tileRefreshTimer = null;
+  // Two-tier debounce: fast for field detection, slow for expensive DOM work.
+  // buildPriceBubbles and refreshListView are the crash bottlenecks during
+  // rapid scrolling — they destroy/recreate hundreds of DOM nodes per call.
+  let _tileFieldTimer    = null;
+  let _tileExpensiveTimer = null;
+
   vectorLayer.on('tileload', function() {
-    clearTimeout(_tileRefreshTimer);
-    // Longer debounce on mobile so rapid pan/zoom doesn't queue multiple heavy redraws
-    _tileRefreshTimer = setTimeout(() => {
+    // Tier 1 — field schema detection: fast, runs soon after tiles settle
+    clearTimeout(_tileFieldTimer);
+    _tileFieldTimer = setTimeout(() => {
       tryDetectTileFields();
-      if (state.taxdefault.geojson) {
-        refreshListView();
-        if (!isMobile()) buildPriceBubbles();
-      }
-    }, isMobile() ? 1500 : 500);
+    }, isMobile() ? 800 : 300);
+
+    // Tier 2 — expensive DOM work: only fires after scroll fully settles,
+    // and only when the relevant UI is actually visible.
+    clearTimeout(_tileExpensiveTimer);
+    _tileExpensiveTimer = setTimeout(() => {
+      if (!state.taxdefault.geojson) return;
+      const listPanel = document.getElementById('parcel-list-panel');
+      const listOpen  = listPanel && listPanel.style.display !== 'none';
+      if (listOpen) refreshListView();
+      if (!isMobile()) buildPriceBubbles();
+    }, isMobile() ? 2500 : 1800);
   });
 
   vectorLayer.on('click', function(e) {
